@@ -30,12 +30,10 @@ constexpr const char *DEFAULT_ASSETS_DIR =
 	"/Users/geekjapan/dev/projects/touhou/assets/th01";
 constexpr const char *ASSET_CANARY = "REIIDEN2.GRP";
 
-constexpr const char *GOLDEN_PATH =
-#ifdef PORT_TESTS_GOLDEN_DIR
-	PORT_TESTS_GOLDEN_DIR "/title_reference.ppm";
-#else
-	"port/tests/golden/title_reference.ppm";
-#endif
+// The golden image is rendered from ZUN's copyrighted title artwork, so it
+// lives next to the (equally unredistributable) game assets rather than in
+// the repository: <assets_dir>/golden/title_reference.ppm.
+constexpr const char *GOLDEN_RELATIVE = "/golden/title_reference.ppm";
 
 // SKIP (not fail) autotools-style: CMake's SKIP_RETURN_CODE test property
 // (set in CMakeLists.txt for this test) maps this exit code to "skipped".
@@ -123,12 +121,16 @@ int main() {
 	std::vector<uint32_t> fb(static_cast<size_t>(RES_X) * RES_Y);
 	pc98emu_render(fb.data());
 
+	std::string golden_path = assets_dir + GOLDEN_RELATIVE;
 	bool read_ok = false;
-	std::vector<uint8_t> golden_bytes = read_file(GOLDEN_PATH, read_ok);
+	std::vector<uint8_t> golden_bytes = read_file(golden_path, read_ok);
 	if(!read_ok) {
-		std::fprintf(stderr,
-			"title_screen_golden: couldn't read golden file '%s'\n", GOLDEN_PATH);
-		return 1;
+		std::printf(
+			"title_screen_golden: skipping -- no golden reference at '%s' "
+			"(render one with TH01_DUMP_FRAME and place it there)\n",
+			golden_path.c_str()
+		);
+		return EXIT_SKIP;
 	}
 	int gw = 0, gh = 0;
 	const uint8_t *gpix = nullptr;
