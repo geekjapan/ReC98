@@ -21,7 +21,20 @@ namespace {
 // the vendored BDF files' native bit order and pc98emu_render()'s VRAM dot
 // convention (vram.cpp: "bit7 = leftmost dot in the byte").
 std::array<std::array<uint8_t, pc98emu::CELL_H>, 256> g_ank_glyph;
-std::unordered_map<uint16_t, std::array<uint16_t, pc98emu::CELL_H>> g_kanji_glyph;
+
+// Heap-allocated and deliberately never freed: several tests (see e.g.
+// stage1_bringup_test.cpp's "quitter" thread) call std::exit() from a
+// background thread the instant their director script finishes, while the
+// main thread's game loop (still running -- main_main()'s stage loop never
+// returns on its own) may be mid-frame inside glyph_row() below, reading
+// this map. std::exit() runs static-storage-duration destructors on the
+// calling thread without waiting for other threads to stop, so a
+// stack/value member here would let the main thread's concurrent find()
+// race a live ~unordered_map() teardown -- intermittent SIGSEGV inside the
+// hash-map's own node-freeing code. A reference to a leaked heap object has
+// no destructor to race against.
+std::unordered_map<uint16_t, std::array<uint16_t, pc98emu::CELL_H>> &g_kanji_glyph =
+	*new std::unordered_map<uint16_t, std::array<uint16_t, pc98emu::CELL_H>>();
 bool g_fonts_loaded = false;
 bool g_blink_visible = true;
 
