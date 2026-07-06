@@ -26,31 +26,22 @@
 //
 // 2. `entrypoint_exec()`: th01/core/initexit.cpp's game_switch_binary() --
 //    reached from several places in main_main() (returning to OP.EXE,
-//    advancing to the next binary segment, jumping to the cutscene player)
-//    -- calls this to restart the process at a different entry point. Real
-//    implementation needs th01/pc98/entry.cpp's DOS multi-entrypoint
-//    dispatcher, which neither th01op nor th01main build (see
-//    port/app/main_op.cpp's header comment). Every one of th01main's
-//    reachable game_switch_binary() call sites is well past the "no
-//    assets" bring-up scope (they all require a live playthrough to reach),
-//    so this is a clearly-logged stub, identical in spirit to
-//    op_globals.cpp's.
-#include <cstdio>
-#include <cstdlib>
-
+//    advancing to the next binary segment -- including a self-re-exec into
+//    a fresh th01main process for a boss-adjacent stage_id transition,
+//    matching the original multi-binary DOS architecture -- and jumping to
+//    the cutscene player). T21 (see /Users/geekjapan/dev/projects/touhou/
+//    PLAN.md's M5) implements this for real via port/shim/masterlib/
+//    chain_exec.hpp: an execv() into the sibling binary, replacing this
+//    process -- see that header for the design rationale.
 #include "th01/pc98/entry.hpp"
 #include "th01/resident.hpp"
+
+#include "port/shim/masterlib/chain_exec.hpp"
 
 end_sequence_t end_flag = ES_NONE;
 uscore_t score = 0;
 
 void entrypoint_exec(entrypoint_t entrypoint)
 {
-	std::fprintf(
-		stderr,
-		"th01main: entrypoint switch (%d) requested, but th01main only "
-		"implements the REIIDEN.EXE gameplay closure -- exiting.\n",
-		static_cast<int>(entrypoint)
-	);
-	std::exit(0);
+	port::chain_exec(entrypoint, "th01main");
 }

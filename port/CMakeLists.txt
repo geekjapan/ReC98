@@ -159,6 +159,7 @@ target_link_libraries(shim PUBLIC SDL3::SDL3)
 add_library(masterlib STATIC
 	shim/masterlib/file_io.cpp
 	shim/masterlib/resdata.cpp
+	shim/masterlib/chain_exec.cpp
 	shim/masterlib/keyboard.cpp
 	shim/masterlib/random.cpp
 	shim/masterlib/gfx.cpp
@@ -166,6 +167,25 @@ add_library(masterlib STATIC
 	shim/masterlib/text.cpp
 )
 target_link_libraries(masterlib PRIVATE compat shim portsjis)
+# T21 binary-switching chain (port/shim/masterlib/chain_exec.hpp): all three
+# port executables (th01op/th01main/th01fuuin) land directly in this build
+# directory (no per-target RUNTIME_OUTPUT_DIRECTORY override below), so
+# that's also where chain_exec() looks for whichever sibling binary
+# game_switch_binary() asks for -- same "absolute build-tree path baked in,
+# not packaged for distribution" convention as pc98emu's PC98EMU_FONT_DIR
+# above. Overridable at runtime via the TH01_PORT_BIN_DIR environment
+# variable (see chain_exec.cpp).
+target_compile_definitions(masterlib PRIVATE
+	PORT_CHAIN_BIN_DIR="${CMAKE_CURRENT_BINARY_DIR}"
+)
+# chain_exec.cpp switches on th01/pc98/entry.hpp's entrypoint_t, whose
+# EP_MAIN enumerator only exists `#if (GAME == 1)` -- unlike the rest of
+# masterlib, this one TU is TH01-specific (matching entry.hpp's own
+# per-game branching), so GAME=1 is scoped to just this file rather than
+# the whole (otherwise game-agnostic) masterlib target.
+set_source_files_properties(shim/masterlib/chain_exec.cpp PROPERTIES
+	COMPILE_DEFINITIONS GAME=1
+)
 
 # ---------------------------------------------------------------------------
 # portsjis: SJIS(cp932) -> UTF-8 filename translation (see
@@ -823,3 +843,43 @@ target_link_libraries(test_boss_singyoku PRIVATE
 )
 add_test(NAME boss_singyoku COMMAND test_boss_singyoku)
 set_tests_properties(boss_singyoku PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 120)
+
+# ---------------------------------------------------------------------------
+# T21 (PLAN.md M5): binary-switching chain acceptance test. Unlike every
+# other _test.cpp above, this one does NOT link th01op_core/th01main_core --
+# it fork()s and execl()s the real th01op/th01main *executables* built above,
+# since port/shim/masterlib/chain_exec.cpp's entrypoint_exec() now does a
+# real execv() between them (see fullchain_binary_switch_test.cpp's header
+# comment for why an in-process test harness can't drive this the way
+# menu_nav_test.cpp/stage1_holdshot_test.cpp do). PORT_CHAIN_BIN_DIR must
+# match chain_exec.cpp's own (both point at this same build directory, where
+# th01op/th01main/th01fuuin all land). Generous timeout: two SDL host
+# startups plus 4 accelerated card-wall clears across real process restarts.
+# ---------------------------------------------------------------------------
+add_executable(test_fullchain_binary_switch tests/fullchain_binary_switch_test.cpp)
+target_link_libraries(test_fullchain_binary_switch PRIVATE appassetsdir)
+target_compile_definitions(test_fullchain_binary_switch PRIVATE
+	PORT_CHAIN_BIN_DIR="${CMAKE_CURRENT_BINARY_DIR}"
+	PORT_TESTS_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}"
+)
+add_dependencies(test_fullchain_binary_switch th01op th01main)
+add_test(NAME fullchain_binary_switch COMMAND test_fullchain_binary_switch)
+set_tests_properties(fullchain_binary_switch PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 120)
+
+# ---------------------------------------------------------------------------
+# T21 (PLAN.md M5): FUUIN.EXE real (non-preview) ending acceptance test --
+# see fuuin_ending_test.cpp's header comment. Unlike the binary-switch test
+# above, this one calls main_cutscene() in-process (like menu_nav_test.cpp/
+# stage1_bringup_test.cpp) since TH01_PORT_CHAIN_STOP keeps the final
+# game_switch_binary(EP_OP) from actually execv()-ing away. Generous
+# timeout: the ED*.GRP slideshow is many real (frame_delay()-paced, no
+# early-exit) seconds of animation by original-game design, not a fixed
+# wall-clock guess.
+# ---------------------------------------------------------------------------
+add_executable(test_fuuin_ending tests/fuuin_ending_test.cpp)
+target_compile_definitions(test_fuuin_ending PRIVATE GAME=1)
+target_link_libraries(test_fuuin_ending PRIVATE
+	th01fuuin_core appassetsdir apphost pc98emu shim compat SDL3::SDL3 Threads::Threads
+)
+add_test(NAME fuuin_ending COMMAND test_fuuin_ending)
+set_tests_properties(fuuin_ending PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 120)

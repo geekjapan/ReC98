@@ -120,6 +120,74 @@ volume is a uniform TL attenuation rather than per-algorithm carrier-only
 attenuation. Effect sounds (`.MDE`, `mdrv2_se_load()`/`mdrv2_se_play()`) use
 a different, not-yet-reverse-engineered format and remain silent no-ops.
 
+## Binary-switching chain (OP.EXE -> REIIDEN.EXE -> FUUIN.EXE, M5)
+
+On real hardware, TH01 is one combined "debloat" binary with multiple entry
+points (`th01/pc98/entry.cpp`), and `game_switch_binary()`
+(`th01/core/initexit.cpp`) switches between them via `execl()` of *itself*
+with a different `argv[1]`. This port instead builds three separate
+executables (`th01op`/`th01main`/`th01fuuin`, one per original .EXE, each
+with its own `main()` under `app/`) -- so `entrypoint_exec()`
+(`th01/pc98/entry.hpp`'s seam for this) is implemented per-binary in
+`shim/op_globals.cpp`/`shim/main_globals.cpp`/`shim/fuuin_globals.cpp`, all
+three now delegating to `shim/masterlib/chain_exec.{hpp,cpp}`.
+
+**Design choice**: a real `execv()` into the sibling binary, replacing the
+current process image, rather than in-process re-dispatch -- see
+`chain_exec.hpp`'s header comment for the full rationale (closer match to
+the original process-boundary architecture; lets `resident`/scoredat
+survival actually get tested, since a leftover in-process pointer surviving
+a function call proves nothing that a real process replacement doesn't).
+Resident state (`th01/resident.hpp`'s `resident_t`, looked up via
+`th01/core/resident.cpp`'s `ResData<T>`) is handed off across each `execv()`
+by serializing every `shim/masterlib/resdata.cpp` block to a flat file
+(path via the `TH01_PORT_STATE_FILE` environment variable, auto-generated
+from the process's PID if unset -- stable across the whole chain, since
+`execv()` never changes the PID -- and inherited automatically by every
+hop); the next process's first `resdata_exist()`/`resdata_create()` call
+transparently loads it back in and deletes the file. Sibling binaries are
+resolved via `PORT_CHAIN_BIN_DIR`, baked in at build time (same convention
+as `pc98emu`'s `PC98EMU_FONT_DIR`; overridable via `TH01_PORT_BIN_DIR`).
+
+`app/main_reiiden.cpp` only seeds a fresh resident
+(`app/reiiden_bootstrap.hpp`) when none already exists -- otherwise it would
+silently discard whatever the previous hop (OP.EXE's `start_game()`, or
+REIIDEN.EXE's own self-re-exec for a boss-adjacent `stage_id` transition)
+put there. `app/main_fuuin.cpp` similarly picks the real
+resident-driven ending path over the hidden `"t1"`/`"t2"` preview shortcut
+whenever a resident structure exists.
+
+**Acceptance test**: `tests/fullchain_binary_switch_test.cpp` can't drive
+this the way `menu_nav_test.cpp`/`stage1_holdshot_test.cpp` do (an in-process
+director thread injecting synthetic keys) -- `execv()` replaces the whole
+process, director thread included, the instant `entrypoint_exec()` runs. So
+the actual scripted driving lives in the production binaries themselves,
+gated off by default behind `TH01_PORT_AUTOPILOT_OP`/
+`TH01_PORT_AUTOPILOT_MAIN` (see `app/chain_autopilot.hpp` and the autopilot
+threads in `app/main_op.cpp`/`app/main_reiiden.cpp`), reusing
+`menu_nav_test.cpp`'s menu-navigation technique and
+`stage1_holdshot_test.cpp`'s `test_damage` debug-cheat technique
+respectively. The test itself `fork()`s + `execl()`s the real `th01op`
+binary with those variables set and waits for the whole chain (OP menu ->
+START -> real `execv()` -> stage 1's 4 card-wall segments, accelerated ->
+a boss-adjacent `stage_id` transition -> a second real `execv()` into a
+fresh `th01main` process) to exit(0) on its own -- verifying with a
+sentinel written to `resident_t::unused_3` (a field no original ZUN code
+ever touches) that state actually survives both `execv()` hops, not just
+that the process didn't crash.
+
+`tests/fuuin_ending_test.cpp` covers the other end of the chain: it seeds a
+cleared-game resident directly (`app/fuuin_bootstrap.hpp`) and calls
+`main_cutscene()` with real (non-`"t"`-prefixed) args, driving the actual
+`end_init()` path -- letting the real `ED*.GRP` ending slideshow render
+(inspectable via `TH01_DUMP_FRAME`) and proving both the verdict screen's
+input-gated wait and `th01/hiscore/regist.cpp`'s high-score name-entry loop
+are escapable headlessly (synthetic Return/`input_ok` presses). It sets
+`TH01_PORT_CHAIN_STOP=1` (`chain_exec.cpp`'s test-only escape hatch) so the
+ending's own final `game_switch_binary(EP_OP)` confirms the switch decision
+without actually `execv()`-ing into `th01op` -- irrelevant to what this test
+verifies.
+
 ## Third-party assets
 
 `port/assets/font/` vendors the Shinonome 16-dot JIS bitmap font (東雲フォント)

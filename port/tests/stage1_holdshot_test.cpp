@@ -13,13 +13,18 @@
 // clearing the last non-boss segment, th01/main_01.cpp's post-stage-clear
 // handling calls game_switch_binary(EP_MAIN) for any boss-adjacent stage_id
 // (matching the original multi-binary DOS architecture, which re-exec'd
-// REIIDEN.EXE itself between major stage transitions) -- a re-exec this
-// standalone port doesn't implement yet, so port/shim/main_globals.cpp's
-// entrypoint_exec() logs it and calls exit(0). See boss_singyoku_test.cpp
-// for the boss fight itself, verified in its own process (seeded with
-// stage_id already at BOSS_STAGE) precisely because this transition can't
-// carry a single process from "all card walls cleared" into "boss fight in
-// progress" yet.
+// REIIDEN.EXE itself between major stage transitions). T21 (see
+// /Users/geekjapan/dev/projects/touhou/PLAN.md's M5) made this a *real*
+// execv() into a fresh th01main process (port/shim/masterlib/chain_exec.hpp)
+// -- which replaces this test's own process image, same as it would any
+// other th01main process. Setting TH01_PORT_AUTOPILOT_MAIN (see port/app/
+// main_reiiden.cpp/chain_autopilot.hpp) makes that freshly-exec'd process
+// recognize resident_t::stage_id is already at BOSS_STAGE and cleanly
+// exit(0) immediately instead of idling forever with no input source,
+// keeping this test's scope exactly where it was before the real exec chain
+// existed: card-wall stability, not the boss fight itself (still its own
+// separate process/test, see boss_singyoku_test.cpp) or the actual chain
+// mechanism (verified end-to-end by fullchain_binary_switch_test.cpp).
 //
 // Root cause #1 (see th01/hardware/scrollup.cpp's REC98_PORT branch): every
 // life lost or stage segment cleared calls z_vsync_wait_and_scrollup(0),
@@ -266,6 +271,14 @@ int main() {
 		std::fprintf(stderr, "stage1_holdshot: host_init() failed\n");
 		return 1;
 	}
+
+	// See the file header comment: game_switch_binary(EP_MAIN) now really
+	// execv()s into a fresh th01main process once stage_id reaches
+	// BOSS_STAGE. That process's own main() (port/app/main_reiiden.cpp)
+	// checks this same environment variable and, seeing stage_id already
+	// there, exits(0) immediately instead of idling with no input source --
+	// keeping this test's own scope at "stability through the card walls".
+	setenv("TH01_PORT_AUTOPILOT_MAIN", "1", 1);
 
 	port::reiiden_seed_fresh_resident();
 
