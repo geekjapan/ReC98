@@ -123,9 +123,25 @@ void graph_type_kanji_n(
 #define graph_type_ank(left, top, str) { \
 	graph_type_ank_n(left, top, (sizeof(str) - 1), str); \
 }
+#ifdef REC98_PORT
+// REC98_PORT: string-table macros like GAME_TITLE expand to plain `"..."`
+// literals (type `const char*`), assigned here into
+// graph_type_kanji_n()'s `const sshiftjis_kanji_t*` (aka `const int8_t*`,
+// unconditionally -- unlike shiftjis_t/sshiftjis_t, this typedef isn't
+// REC98_PORT-gated in shiftjis.hpp) parameter -- valid under Borland's
+// "a byte is a byte" leniency, ill-formed between the distinct `char`/
+// `signed char` types on a standard host compiler.
+#define graph_type_kanji(left, top, str) { \
+	graph_type_kanji_n( \
+		left, top, ((sizeof(str) - 1) / 2), \
+		reinterpret_cast<const sshiftjis_kanji_t *>(str) \
+	); \
+}
+#else
 #define graph_type_kanji(left, top, str) { \
 	graph_type_kanji_n(left, top, ((sizeof(str) - 1) / 2), str); \
 }
+#endif
 
 // > rendering text to VRAM, where it wouldn't be limited to the byte grid
 // > still aligning it to the byte grid
