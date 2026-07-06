@@ -13,3 +13,6 @@ tup-generate.vardict
 # SDL port build dir
 port/build/
 .orca/
+
+# Scratch research output (firecrawl skill)
+.firecrawl/
