@@ -18,6 +18,7 @@
 #include "x86real.h"
 
 #include "pc98emu/grcg.hpp"
+#include "pc98emu/vram.hpp"
 #include "port/shim/input.hpp"
 
 #include <cassert>
@@ -125,6 +126,28 @@ uint8_t __outportb__(uint16_t port, uint8_t value) {
 		assert(false && "outportb(): unhandled port");
 		return value;
 	}
+}
+
+// 16-bit port I/O: th01/main/hud/hud.cpp inlines `outport(0xA6, page)`
+// (accessible-VRAM-page select) directly instead of going through
+// port/page.hpp's page_access() macro -- same port, same pc98emu backing
+// call, just reached via the 16-bit x86real.h intrinsic instead of the
+// 8-bit one.
+uint16_t __outportw__(uint16_t port, uint16_t value) {
+	switch(port) {
+	case 0xA6: // Accessible VRAM page select (th01/main/hud/hud.cpp)
+		pc98emu_page_set_accessible(static_cast<int>(value));
+		return value;
+
+	default:
+		assert(false && "outportw(): unhandled port");
+		return value;
+	}
+}
+
+uint16_t __inportw__(uint16_t port) {
+	assert(false && "inportw(): unhandled port");
+	return 0;
 }
 
 void __emit__(uint8_t, ...) {

@@ -46,6 +46,19 @@ enum singyoku_hp_t {
 // State that's suddenly no longer shared with other bosses
 // --------------------------------------------------------
 
+#ifdef REC98_PORT
+// REC98_PORT: this file intentionally shadows boss.hpp's shared
+// boss_phase/boss_phase_frame/boss_hp `extern`s (visible here via
+// entity_a.hpp) with SinGyoku-private static storage of the same names --
+// legal under Borland/legacy C linkage rules (a file-scope static quietly
+// overrides a visible extern of the same name), but an ODR violation
+// ("static declaration follows non-static declaration") under ISO C++.
+// Renaming just these three locals preserves the exact same shadowing
+// behavior (nothing else in this file uses the shared globals).
+#define boss_phase b05_boss_phase
+#define boss_phase_frame b05_boss_phase_frame
+#define boss_hp b05_boss_hp
+#endif
 static int8_t boss_phase = 0;
 static int boss_phase_frame;
 static int invincibility_frame;

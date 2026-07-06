@@ -1,7 +1,10 @@
 /// Makai Stage 15 Boss - Elis
 /// --------------------------
 
+#ifndef REC98_PORT
+// REC98_PORT: see th01/main/bonus.cpp's identical delay()-only note.
 #include <dos.h>
+#endif
 #include <stdlib.h>
 #include "th01/rank.h"
 #include "th01/resident.hpp"

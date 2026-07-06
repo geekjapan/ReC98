@@ -1,5 +1,12 @@
 #include "th01/math/polar.hpp"
+#ifdef REC98_PORT
+// REC98_PORT: see th01/hardware/graph.h's identical note -- a bare
+// `#include "planar.h"` from within th01/hardware/ resolves to the sibling
+// th01/hardware/planar.h, not the root one this file needs.
+#include <planar.h>
+#else
 #include "planar.h"
+#endif
 
 // Inverts the 32×32 square at (⌊left/8⌋*8, top) on the given VRAM [plane].
 // Returns true if the square is not fully within the boundaries of VRAM and

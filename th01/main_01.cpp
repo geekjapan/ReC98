@@ -4,8 +4,18 @@
  */
 
 #include <float.h>
+#ifdef REC98_PORT
+// REC98_PORT: <new.h>/<process.h> are Turbo C++ headers; the host toolchain
+// provides set_new_handler() via <new> instead, and this file's only use of
+// <process.h> is coreleft() (an RTL heap-introspection function with no
+// header declaration in the original codebase either -- see
+// compat/borland.hpp's REC98_PORT stub).
+#include <new>
+using std::set_new_handler;
+#else
 #include <new.h>
 #include <process.h>
+#endif
 #include <stdio.h>
 #include <string.h>
 #include "platform/x86real/pc98/keyboard.hpp"

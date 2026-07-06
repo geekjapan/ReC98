@@ -1,5 +1,11 @@
+#ifdef REC98_PORT
+// REC98_PORT: <alloc.h>/<conio.h> are Turbo C++ headers; coreleft() has a
+// host stub in compat/borland.hpp, and kbhit() (used only for a debug-mode
+// status printout) gets one alongside it there.
+#else
 #include <alloc.h>
 #include <conio.h>
+#endif
 #include <stdio.h>
 #include "th01/main/debug.hpp"
 #include "th01/shiftjis/debug.hpp"
@@ -10,7 +16,13 @@
 bool mode_debug;
 bool16 mode_test = false;
 bool16 test_damage = false;
+#ifdef REC98_PORT
+// REC98_PORT: see bomb.cpp's bomb_frame for why this needs to match
+// debug.hpp's `extern uint32_t` exactly on this host's LP64 ABI.
+uint32_t frame_since_start_of_binary;
+#else
 unsigned long frame_since_start_of_binary;
+#endif
 uint32_t coreleft_prev;
 // -----
 

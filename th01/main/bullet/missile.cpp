@@ -134,7 +134,16 @@ void CMissiles::unput_update_render(void)
 			}
 		} else {
 			if(in_current_interlace_field(i)) {
+#ifdef REC98_PORT
+				// REC98_PORT: incrementing through a cast is a Borland/
+				// C-style-cast lvalue leniency ISO C++'s static_cast
+				// doesn't allow; reassign instead of casting-as-lvalue.
+				flag[i] = static_cast<missile_flag_t>(
+					static_cast<int8_t>(flag[i]) + 1
+				);
+#else
 				static_cast<int8_t>(flag[i])++;
+#endif
 			}
 			if(flag[i] > MF_HIT_last) {
 				flag[i] = MF_FREE;

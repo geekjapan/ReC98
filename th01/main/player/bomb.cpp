@@ -19,7 +19,15 @@ static const screen_y_t SQUARE_CENTER_Y = ((RES_Y / 2) - (32 / 2));
 // -----
 
 bool bomb_damaging = false;
+#ifdef REC98_PORT
+// REC98_PORT: bomb.hpp declares this `extern uint32_t`; `unsigned long` is
+// 32 bits on Borland/DOS (matching uint32_t exactly) but 64 bits on this
+// host's LP64 ABI, which would make the extern declaration and this
+// definition genuinely different types instead of just spelled differently.
+uint32_t bomb_frame = 0;
+#else
 unsigned long bomb_frame = 0;
+#endif
 int bomb_doubletap_frame = 0;
 // -----
 

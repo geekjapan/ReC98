@@ -15,6 +15,7 @@
 
 #include "pc98emu/grcg.hpp"
 #include "pc98emu/pc98emu.hpp"
+#include "pc98emu/vram.hpp"
 #include "platform/x86real/pc98/keyboard.hpp"
 #include "port/shim/input.hpp"
 #include "x86real.h"
@@ -78,6 +79,20 @@ int main() {
 		"outportb(0x7C/0x7E) GRCG RMW tile write leaves plane R untouched"
 	);
 	outportb(0x7C, GC_OFF);
+
+	// outport(0xA6, page) (th01/main/hud/hud.cpp inlines the 16-bit page-
+	// select write directly instead of going through page_access()) must
+	// reach pc98emu's accessible-page state, same as page_access() does.
+	outport(0xA6, 1);
+	expect(
+		pc98emu_page_get_accessible() == 1,
+		"outport(0xA6, page) reaches pc98emu's accessible-page state"
+	);
+	outport(0xA6, 0);
+	expect(
+		pc98emu_page_get_accessible() == 0,
+		"outport(0xA6, page) reaches pc98emu's accessible-page state (page 0)"
+	);
 
 	if(g_failures == 0) {
 		std::printf("x86real_shim_test: all checks passed\n");
