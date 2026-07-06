@@ -2,7 +2,12 @@
 // ------------------------
 
 #if !defined(MASTER_NEAR) && !defined(MASTER_FAR) && !defined(MASTER_COMPACT) && !defined(MASTER_MEDIUM)
-#if defined(__SMALL__) || defined(__TINY__) || defined(M_I86SM) || defined(M_I86TM)
+#if defined(REC98_PORT)
+// Host build: flat address space, no Borland memory models. far/near/pascal
+// are #define'd away to nothing by compat/borland.hpp, so any of the four
+// branches below would do; MASTER_NEAR is the simplest (near only, no far).
+#define MASTER_NEAR
+#elif defined(__SMALL__) || defined(__TINY__) || defined(M_I86SM) || defined(M_I86TM)
 #define MASTER_NEAR
 #elif defined(__COMPACT__) || defined(M_I86CM)
 #define MASTER_COMPACT
