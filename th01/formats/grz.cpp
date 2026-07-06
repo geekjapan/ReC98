@@ -1,9 +1,22 @@
 #pragma option -zCPTN_GRP_GRZ
 
+#ifdef REC98_PORT
+// REC98_PORT: <mem.h> is a Turbo C++ header (memcmp() et al.); this file
+// only needs memcmp(), which <cstring> provides on a host toolchain.
+#include <cstring>
+#else
 #include <mem.h>
+#endif
 #include <stddef.h>
 #include "x86real.h"
 #include "libs/master.lib/master.hpp"
+#ifdef REC98_PORT
+// REC98_PORT: see th01/formats/grc.cpp for the full explanation -- graph.h
+// needs the root planar.h's typedefs (dots16_t, ...), which its own
+// quote-included "planar.h" doesn't provide (resolves to the sibling
+// th01/hardware/planar.h instead).
+#include "planar.h"
+#endif
 #include "th01/hardware/graph.h"
 #include "th01/formats/grz.h"
 
