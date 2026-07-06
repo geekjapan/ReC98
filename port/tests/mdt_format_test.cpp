@@ -27,7 +27,7 @@ void test_header_and_tables() {
 	assert(song.channel_table.size() == 6);
 	assert(song.channel_table[0].id == 0x80);
 	assert(song.channel_table[1].id == 0); // disabled slot
-	assert(song.channel_table[3].id == 0x83);
+	assert(song.channel_table[3].id == 0x40);
 	assert(song.fm_instruments.size() == 1);
 	assert(song.fm_instruments[0].raw[4] == 3);
 	assert(song.ssg_envelopes.size() == 2);
@@ -36,6 +36,7 @@ void test_header_and_tables() {
 	assert(channel_role_for_slot(0, song.channel_table[0].id) == ChannelRole::Fm1);
 	assert(channel_role_for_slot(3, song.channel_table[3].id) == ChannelRole::Ssg1);
 	assert(channel_role_for_slot(1, song.channel_table[1].id) == ChannelRole::Unsupported);
+	assert(channel_role_for_slot(3, 0x83) == ChannelRole::Unsupported); // "D": FM-semantics id, no OPN hardware
 
 	std::printf("test_header_and_tables: OK\n");
 }

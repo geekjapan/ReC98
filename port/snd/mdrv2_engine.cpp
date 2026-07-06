@@ -30,6 +30,22 @@ int8_t as_signed(uint8_t b) {
 	return static_cast<int8_t>(b);
 }
 
+// Which physical TL register "slot" (p = 0-3, per mdt_format.hpp's "slot
+// 0/1/2/3 = operator 1/3/2/4" register layout) is one of the algorithm's
+// audible carrier outputs, one bit per slot. @V (MDRV2's per-channel volume)
+// is a loudness control, so only carrier operators' TL should move with it
+// -- attenuating a modulator changes timbre, not loudness. Sourced from
+// ymfm_fm.ipp's s_algorithm_ops table (the actual chip model this engine
+// drives), translated from that table's logical operator numbering (O1-O4)
+// to physical slot numbering via the O1/O3/O2/O4 = slot0/1/2/3 mapping:
+//   alg 0-3: only O4 (slot3) is a carrier (serial chain ending in O4)
+//   alg 4:   O2+O4 (slot2, slot3)
+//   alg 5-6: O2+O3+O4 (slot1, slot2, slot3)
+//   alg 7:   O1+O2+O3+O4, i.e. all 4 slots (fully parallel)
+constexpr uint8_t kFmCarrierSlotMask[8] = {
+	0b1000, 0b1000, 0b1000, 0b1000, 0b1100, 0b1110, 0b1110, 0b1111,
+};
+
 } // namespace
 
 Mdrv2Engine::Mdrv2Engine(uint32_t opn_clock_hz) : chip_(opn_clock_hz), clock_hz_(opn_clock_hz) {
@@ -57,6 +73,7 @@ void Mdrv2Engine::load(MdtSong song) {
 	recompute_samples_per_tick();
 	samples_into_tick_ = 0;
 	playing_ = false;
+	ssg_mixer_ = 0x3F;
 
 	for(size_t i = 0; i < song_.channel_table.size(); i++) {
 		const MdtChannelSlot &slot = song_.channel_table[i];
@@ -193,6 +210,39 @@ static uint32_t find_pipe_loop_end(MdtSong &song, uint32_t scan_pc) {
 	return scan_pc;
 }
 
+// Same idea as find_pipe_loop_end(), for the bracket-colon ("[:"/":]"/"|")
+// loop variant instead of the pipe-colon ("|:"/":"/":|") one. 0xF6/0xF7 carry
+// extra bytes beyond a repeat count (a 2-byte pointer for 0xF6, 3 bytes for
+// 0xF7) that MDTParsingTools' own author couldn't resolve the meaning of
+// either (see mdt_decomp_rip.py's 0xF6/0xF7/0xF9 handlers, and
+// mdrv2_engine.hpp's header comment) -- this engine ignores them and
+// forward-scans instead, exactly like the pipe-colon variant already did.
+static uint32_t find_bracket_colon_loop_end(MdtSong &song, uint32_t scan_pc) {
+	int depth = 0;
+	while(scan_pc < song.data.size()) {
+		uint8_t op = song.data[scan_pc++];
+		if(op == 0xF6) {
+			depth++;
+			scan_pc += 3; // count + 2-byte pointer, unresolved (see above)
+			continue;
+		}
+		if(op == 0xF7) {
+			if(depth == 0) {
+				return scan_pc + 3; // this loop's own end marker's args
+			}
+			depth--;
+			scan_pc += 3;
+			continue;
+		}
+		int argb = mdt_opcode_arg_bytes(op);
+		if(argb < 0) {
+			return scan_pc; // malformed stream; bail defensively
+		}
+		scan_pc += static_cast<uint32_t>(argb);
+	}
+	return scan_pc;
+}
+
 void Mdrv2Engine::process_opcodes(ChannelState &ch) {
 	while(true) {
 		uint8_t op = fetch_u8(song_, ch.pc);
@@ -282,7 +332,14 @@ void Mdrv2Engine::process_opcodes(ChannelState &ch) {
 			case 0xEB: { // instrument change / SSG noise+envelope select
 				uint8_t inst = fetch_u8(song_, ch.pc);
 				if(ch.role == ChannelRole::Ssg1 || ch.role == ChannelRole::Ssg2 || ch.role == ChannelRole::Ssg3) {
-					ch.instrument = inst & 0x3F; // envelope index; noise-mix bits not modeled
+					// Bits 7/6 pack the tone/noise mixer mix (active-low, so
+					// a clear bit means "enabled"); the low 6 bits are the
+					// envelope index (unused -- see mdt_format.hpp's header
+					// comment). Confirmed against MDTParsingTools'
+					// mdt_decomp_rip.py 0xEB handling for SSG-role channels.
+					ch.ssg_tone_enabled = !(inst & 0x40);
+					ch.ssg_noise_enabled = !(inst & 0x80);
+					ch.instrument = inst & 0x3F; // envelope index; envelope shape not modeled
 				} else {
 					ch.instrument = inst;
 					int fm_channel = static_cast<int>(ch.role); // Fm1=0, Fm2=1, Fm3=2
@@ -332,23 +389,43 @@ void Mdrv2Engine::process_opcodes(ChannelState &ch) {
 			case 0xF5: // volume decrease
 				ch.volume = static_cast<uint8_t>(std::max<int>(0, ch.volume - fetch_u8(song_, ch.pc)));
 				break;
-			case 0xF6: // loop start ([:) -- parsed, looping not modeled (see header)
+			case 0xF6: { // loop start ([:); see find_bracket_colon_loop_end()'s
+			             // comment for what's unresolved about this opcode
+				uint8_t count = fetch_u8(song_, ch.pc);
+				fetch_u8(song_, ch.pc); // 2-byte pointer, unused (see above)
 				fetch_u8(song_, ch.pc);
-				fetch_u8(song_, ch.pc);
-				fetch_u8(song_, ch.pc);
+				ch.loop_stack.push_back({ch.pc, count, 0});
 				break;
-			case 0xF7: // loop end (:]) -- parsed, looping not modeled
+			}
+			case 0xF7: { // loop end (:])
+				fetch_u8(song_, ch.pc); // 3 bytes, unused (see above)
 				fetch_u8(song_, ch.pc);
 				fetch_u8(song_, ch.pc);
-				fetch_u8(song_, ch.pc);
+				if(!ch.loop_stack.empty()) {
+					LoopFrame top = ch.loop_stack.back();
+					ch.loop_stack.pop_back();
+					top.done++;
+					if(top.done < top.count) {
+						ch.pc = top.start_pc;
+						ch.loop_stack.push_back(top);
+					}
+				}
 				break;
+			}
 			case 0xF8: // sync-work value entry -- parsed, not exposed yet
 				fetch_u8(song_, ch.pc);
 				break;
-			case 0xF9: // skip-to-end-of-loop marker -- parsed, not modeled
+			case 0xF9: { // skip-to-end-of-loop mark on last iteration (bracket-colon)
+				fetch_u8(song_, ch.pc); // 2-byte pointer, unused (see above)
 				fetch_u8(song_, ch.pc);
-				fetch_u8(song_, ch.pc);
+				if(!ch.loop_stack.empty()) {
+					LoopFrame &top = ch.loop_stack.back();
+					if(top.done + 1 >= top.count) {
+						ch.pc = find_bracket_colon_loop_end(song_, ch.pc);
+					}
+				}
 				break;
+			}
 			case 0xFA: { // macro call
 				uint16_t location = static_cast<uint16_t>(fetch_u8(song_, ch.pc)) |
 				                     (static_cast<uint16_t>(fetch_u8(song_, ch.pc)) << 8);
@@ -442,11 +519,18 @@ void Mdrv2Engine::write_fm_note(ChannelState &ch, int fm_channel, int octave, in
 	if(ch.instrument < song_.fm_instruments.size()) {
 		// Re-apply volume attenuation on top of the instrument's base TLs
 		// every time a note starts, since @V (0xEC) only updates ch.volume,
-		// not the registers directly (see this function's caller).
+		// not the registers directly (see this function's caller). Only
+		// carrier-operator TLs are attenuated (see kFmCarrierSlotMask) --
+		// modulator TLs stay at the instrument's authored value.
 		const MdtFmInstrument &inst = song_.fm_instruments[ch.instrument];
+		uint8_t alg = inst.raw[4] & 0x07;
+		uint8_t carrier_mask = kFmCarrierSlotMask[alg];
 		uint8_t atten = static_cast<uint8_t>((127 - ch.volume) / 2);
 		for(int p = 0; p < 4; p++) {
-			int tl = inst.raw[10 + p] + atten;
+			int tl = inst.raw[10 + p];
+			if(carrier_mask & (1 << p)) {
+				tl += atten;
+			}
 			chip_.write_reg(static_cast<uint8_t>(0x40 + p * 4 + fm_channel),
 			                 static_cast<uint8_t>(std::clamp(tl, 0, 127)));
 		}
@@ -462,11 +546,16 @@ void Mdrv2Engine::write_ssg_note(ChannelState &ch, int ssg_channel, int octave, 
 	uint32_t period = static_cast<uint32_t>(std::clamp(std::lround(ssg_clock / (16.0 * freq)), 1L, 4095L));
 	chip_.write_reg(static_cast<uint8_t>(0x00 + ssg_channel * 2), static_cast<uint8_t>(period & 0xFF));
 	chip_.write_reg(static_cast<uint8_t>(0x01 + ssg_channel * 2), static_cast<uint8_t>((period >> 8) & 0x0F));
-	// Mixer: enable tone, disable noise, for all 3 channels (0x38 = noise
-	// bits 3-5 set/disabled, tone bits 0-2 clear/enabled). SSG hardware
-	// envelopes aren't modeled (see this file's header comment) -- flat
-	// volume 0-15 scaled down from MDRV2's 0-127 @V range.
-	chip_.write_reg(0x07, 0x38);
+	// Mixer (register 0x07, active-low, shared by all 3 SSG channels): only
+	// this channel's tone/noise bits are touched, per ch.ssg_tone_enabled/
+	// ssg_noise_enabled (decoded from 0xEB -- see process_opcodes). SSG
+	// hardware envelopes aren't modeled (see this file's header comment) --
+	// flat volume 0-15 scaled down from MDRV2's 0-127 @V range.
+	uint8_t tone_bit = static_cast<uint8_t>(1 << ssg_channel);
+	uint8_t noise_bit = static_cast<uint8_t>(1 << (3 + ssg_channel));
+	ssg_mixer_ = ch.ssg_tone_enabled ? (ssg_mixer_ & ~tone_bit) : (ssg_mixer_ | tone_bit);
+	ssg_mixer_ = ch.ssg_noise_enabled ? (ssg_mixer_ & ~noise_bit) : (ssg_mixer_ | noise_bit);
+	chip_.write_reg(0x07, ssg_mixer_);
 	uint8_t vol = static_cast<uint8_t>(std::min<int>(15, ch.volume >> 3));
 	chip_.write_reg(static_cast<uint8_t>(0x08 + ssg_channel), vol);
 }

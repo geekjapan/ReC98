@@ -17,16 +17,14 @@ uint16_t read_u16(const std::vector<uint8_t> &d, size_t off) {
 } // namespace
 
 ChannelRole channel_role_for_slot(size_t slot_index, uint16_t id) {
-	if(id == 0) {
-		return ChannelRole::Unsupported; // disabled slot
-	}
-	switch(slot_index) {
-		case 0: return ChannelRole::Fm1;
-		case 1: return ChannelRole::Fm2;
-		case 2: return ChannelRole::Fm3;
-		case 3: return ChannelRole::Ssg1;
-		case 4: return ChannelRole::Ssg2;
-		case 5: return ChannelRole::Ssg3;
+	(void)slot_index; // role is determined by `id`, not table position -- see below
+	switch(id) {
+		case 0x80: return ChannelRole::Fm1;
+		case 0x81: return ChannelRole::Fm2;
+		case 0x82: return ChannelRole::Fm3;
+		case 0x40: return ChannelRole::Ssg1;
+		case 0x41: return ChannelRole::Ssg2;
+		case 0x42: return ChannelRole::Ssg3;
 		default: return ChannelRole::Unsupported;
 	}
 }
