@@ -96,6 +96,15 @@ uint8_t __inportb__(uint16_t port) {
 }
 
 uint8_t __outportb__(uint16_t port, uint8_t value) {
+	// Analog palette register write sequence (z_palette_show_single()):
+	// 0xA8 latches the color index, then 0xAA/0xAC/0xAE latch the
+	// green/red/blue components in that fixed order -- the write to 0xAE
+	// always arrives last and is what actually commits the color, so it's
+	// the one that calls pc98emu_palette_set().
+	static uint8_t s_pal_index = 0;
+	static uint8_t s_pal_g = 0;
+	static uint8_t s_pal_r = 0;
+
 	switch(port) {
 	case 0x7C: // GRCG mode + plane mask
 	case 0x7E: // GRCG tile register (cycles B/R/G/E)
@@ -113,13 +122,19 @@ uint8_t __outportb__(uint16_t port, uint8_t value) {
 	           // callers)
 	case 0x64: // VSync interrupt trigger ack (vsync.cpp ISR, unreached)
 	case 0x02: // 8259 PIC interrupt mask (vsync.cpp ISR setup, unreached)
-	case 0xA8: // Analog palette: color register select (z_palette_show_single,
+		return value;
+
+	case 0xA8: // Analog palette: color register select
+		s_pal_index = value;
+		return value;
 	case 0xAA: // ... green,
+		s_pal_g = value;
+		return value;
 	case 0xAC: // ... red,
-	case 0xAE: // ... blue components -- unreached by the OP.EXE closure
-	           // (z_graph_init()/z_palette_show_single() aren't on
-	           // main_op()'s title/menu path); TODO wire these into
-	           // pc98emu's palette state if a later milestone reaches them.
+		s_pal_r = value;
+		return value;
+	case 0xAE: // ... blue -- commits the color latched above.
+		pc98emu_palette_set(s_pal_index, s_pal_r, s_pal_g, value);
 		return value;
 
 	default:

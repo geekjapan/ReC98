@@ -262,14 +262,40 @@ void z_graph_clear_0(void)
 void graph_copy_page_to_other(page_t src)
 {
 	PlanarRow_declare(tmp);
-	Planes_declare(p);
 	page_t dst = (src ^ 1);
 
+#ifdef REC98_PORT
+	// REC98_PORT: on real hardware, VRAM_PLANE_B/R/G/E are fixed segment
+	// addresses and page_access() bank-switches what memory they refer to,
+	// so declaring the pointers once before the loop and calling
+	// page_access() between reads/writes works. This port's page_access()
+	// instead repoints the VRAM_PLANE_B/R/G/E globals themselves (see
+	// pc98emu_page_set_accessible()), so a Planes_declare() from before the
+	// loop would keep referring to whichever page was accessible at that
+	// time -- re-declare (and re-offset to the current row) right after
+	// each page_access() call instead.
+	for(screen_y_t y = 0; y < RES_Y; y++) {
+		page_access(src);
+		{
+			Planes_declare(p);
+			Planes_offset(p, 0, y);
+			PlanarRow_blit(tmp, p, ROW_SIZE);
+		}
+		page_access(dst);
+		{
+			Planes_declare(p);
+			Planes_offset(p, 0, y);
+			PlanarRow_blit(p, tmp, ROW_SIZE);
+		}
+	}
+#else
+	Planes_declare(p);
 	for(screen_y_t y = 0; y < RES_Y; y++) {
 		page_access(src);	PlanarRow_blit(tmp, p, ROW_SIZE);
 		page_access(dst);	PlanarRow_blit(p, tmp, ROW_SIZE);
 		Planes_next_row(p);
 	}
+#endif
 }
 /// --------------------
 

@@ -169,8 +169,8 @@ target_link_libraries(masterlib PRIVATE compat shim)
 # ---------------------------------------------------------------------------
 # th01formats: th01/formats/*.cpp (grp/grc/grz/pf/ptn/bos/scoredat -- cfg has
 # no .cpp, just struct declarations) compiled as-is under REC98_PORT, plus
-# port/shim/piload_stub.cpp (a synthetic-format stand-in for libs/piloadc's
-# real 16-bit-assembly .PI/.GRP decoder, see that file's header comment).
+# port/shim/piload.cpp (a real C++ port of libs/piloadc's 16-bit-assembly
+# .PI/.GRP decoder, see that file's header comment).
 # -include forces compat/borland.hpp before every original ReC98 source file
 # here, exactly like it would be available via <dos.h> et al. under Turbo
 # C++ -- see port/compat/borland.hpp's own header comment.
@@ -187,7 +187,7 @@ add_library(th01formats STATIC
 	${CMAKE_CURRENT_SOURCE_DIR}/../th01/formats/ptn.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/../th01/formats/bos.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/../th01/formats/scoredat.cpp
-	shim/piload_stub.cpp
+	shim/piload.cpp
 	shim/egc_th01_shim.cpp
 )
 target_compile_definitions(th01formats PRIVATE GAME=1)
@@ -723,3 +723,17 @@ target_compile_definitions(test_assets_dir PRIVATE
 	PORT_TESTS_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}"
 )
 add_test(NAME assets_dir COMMAND test_assets_dir)
+
+# M1 (SPEC.md) headless pixel verification: decodes the real REIIDEN2.GRP
+# title-screen asset through PiBlitL and compares against tests/golden/
+# title_reference.ppm. Skips (doesn't fail) when the real TH01 assets aren't
+# available on this machine -- see that test's own header comment.
+add_executable(test_title_screen_golden tests/title_screen_golden_test.cpp)
+target_link_libraries(test_title_screen_golden PRIVATE
+	th01op_core appassetsdir pc98emu shim compat SDL3::SDL3
+)
+target_compile_definitions(test_title_screen_golden PRIVATE
+	PORT_TESTS_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/golden"
+)
+add_test(NAME title_screen_golden COMMAND test_title_screen_golden)
+set_tests_properties(title_screen_golden PROPERTIES SKIP_RETURN_CODE 77)
