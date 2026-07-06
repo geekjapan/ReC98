@@ -30,3 +30,31 @@ add_executable(th01port_demo
 	demo/main.cpp
 )
 target_link_libraries(th01port_demo PRIVATE pc98emu SDL3::SDL3)
+
+# ---------------------------------------------------------------------------
+# compat: REC98_PORT Borland/planar.h shim (header-only). Consumed directly
+# by ReC98's own headers (pc98.h/platform.h/planar.h) under #ifdef
+# REC98_PORT, so it needs both the port/ tree (for pc98emu/*.hpp) and the
+# ReC98 repo root (for pc98.h/planar.h/platform.h and the
+# "port/compat/vram_ref.hpp" include planar.h reaches for) on its include
+# path.
+# ---------------------------------------------------------------------------
+add_library(compat INTERFACE)
+target_include_directories(compat INTERFACE
+	${CMAKE_CURRENT_SOURCE_DIR}
+	${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+target_compile_definitions(compat INTERFACE REC98_PORT=1)
+target_compile_options(compat INTERFACE -Wno-unknown-pragmas)
+target_link_libraries(compat INTERFACE pc98emu)
+
+# ---------------------------------------------------------------------------
+# tests
+# ---------------------------------------------------------------------------
+enable_testing()
+
+add_executable(th01port_compat_test
+	tests/compat_vram_ref_test.cpp
+)
+target_link_libraries(th01port_compat_test PRIVATE compat)
+add_test(NAME compat_vram_ref COMMAND th01port_compat_test)
