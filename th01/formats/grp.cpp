@@ -1,5 +1,8 @@
 #pragma option -zCPTN_GRP_GRZ
 
+#ifdef REC98_PORT
+#include <cstdio>
+#endif
 #include "libs/master.lib/master.hpp"
 #include "libs/piloadc/piloadm.hpp"
 #include "th01/hardware/frmdelay.h"
@@ -91,6 +94,15 @@ int grp_put(const char *fn, grp_put_flag_t flag)
 		option = PILOAD_OPT_COLORKEY(15);
 	}
 	if(!file_ropen(fn)) {
+#ifdef REC98_PORT
+		fprintf(
+			stderr,
+			"th01op: missing game data file '%s' -- place original TH01 "
+			"assets in the current directory (or the path pointed to by "
+			"TH01_ASSETS_DIR) to see this content.\n",
+			fn
+		);
+#endif
 		ret = FileNotFound;
 		goto err;
 	}

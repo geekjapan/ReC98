@@ -1,7 +1,18 @@
 /// BIOS
 /// ----
 
+#ifdef REC98_PORT
+// REC98_PORT: a bare `#include "planar.h"` from within th01/hardware/
+// resolves to the *sibling* th01/hardware/planar.h (small TH01-specific
+// macro addendum, no typedefs) rather than the root planar.h (dots8_t,
+// vram_offset_t, SEG_PLANE_*, ...) this file actually needs -- quote-include
+// always checks the including file's own directory first. Angle-include
+// instead: it searches -I paths (repo root is one, see compat's
+// target_include_directories()) without that same-directory check.
+#include <planar.h>
+#else
 #include "planar.h"
+#endif
 
 // Enables the graphics layer in 640x400 mode, applies z_Palettes, and clears
 // page 0.

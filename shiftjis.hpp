@@ -11,8 +11,23 @@ typedef uint16_t jis_t;
 
 // Multibyte Shift-JIS string. Use as replacement for `unsigned char` in
 // situations where the contents are assumed to be Shift-JIS.
+#ifdef REC98_PORT
+// REC98_PORT: countless th01/shiftjis/*.hpp (and other games') string-table
+// macros expand to plain `"..."` literals (type `const char*`) assigned
+// straight into `const shiftjis_t*`/arrays thereof -- valid under Borland
+// (where these files are compiled with unsigned-by-default `char`, making
+// `shiftjis_t` and the literal's element type the same thing), but
+// ill-formed C++ between the distinct `char`/`unsigned char` types on a
+// standard host compiler. Making `shiftjis_t` plain `char` restores that
+// same-type relationship; th01op_core is built with -funsigned-char (see
+// port/CMakeLists.txt) so it still carries unsigned byte semantics for the
+// arithmetic/comparison call sites (_ismbblead() et al.) that assume that.
+typedef char shiftjis_t;
+typedef char sshiftjis_t; // MODDERS: Delete -- see shiftjis_t's REC98_PORT note
+#else
 typedef uint8_t shiftjis_t;
 typedef int8_t sshiftjis_t; // MODDERS: Delete
+#endif
 
 // 2-byte/fullwidth Shift-JIS codepoint.
 typedef uint16_t shiftjis_kanji_t;

@@ -2,8 +2,15 @@
 #include "libs/master.lib/pc98_gfx.hpp"
 #include "platform/x86real/pc98/font.hpp"
 #include "platform/x86real/pc98/grcg.hpp"
+#ifdef REC98_PORT
+// REC98_PORT: <mbctype.h>/<mbstring.h> are Turbo C++ headers for the
+// Shift-JIS helpers this file calls (_ismbblead/_ismbbkana/_mbcjmstojis);
+// see port/compat/mbstring_shim.hpp for their host reimplementation.
+#include "port/compat/mbstring_shim.hpp"
+#else
 #include <mbctype.h>
 #include <mbstring.h>
+#endif
 #include <stdlib.h>
 
 pixel_t pascal text_extent(const shiftjis_t *str)

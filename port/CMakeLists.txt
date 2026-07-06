@@ -126,6 +126,76 @@ target_compile_options(th01formats PRIVATE
 target_link_libraries(th01formats PRIVATE compat masterlib)
 
 # ---------------------------------------------------------------------------
+# apphost: SDL3 presentation host shared by port/app/ entry points -- owns
+# the window/renderer/streaming-texture triple and the "present one frame"
+# step (port::host_present_frame()) that th01/hardware/vsync.hpp's
+# REC98_PORT branch calls into, turning ReC98's vsync-interrupt busy-waits
+# into a real frame-paced blocking wait (see SPEC.md's app/host design).
+# ---------------------------------------------------------------------------
+add_library(apphost STATIC
+	app/host.cpp
+)
+target_link_libraries(apphost PUBLIC pc98emu shim SDL3::SDL3)
+
+# ---------------------------------------------------------------------------
+# th01op_core: TH01 OP.EXE's (title screen + options menu) dependency
+# closure -- th01/op_01.cpp itself, plus every original ReC98 TU it actually
+# calls into (see OP_DEPS.md and port/shim/masterlib/README.md for the
+# survey this scope is derived from). Deliberately excludes REIIDEN.EXE/
+# FUUIN.EXE-only code (gameplay, stages, bosses, tram_x16/scoredat/hiscore):
+# op_01.cpp never reaches any of it.
+#
+# port/compat/x86real_shim.cpp and port/shim/op_globals.cpp are this
+# component's own new shims (int86()/outportb()/inportb()/getvect()/
+# setvect()/__emit__(), and the two REIIDEN-input globals + entrypoint_exec()
+# stub op_01.cpp's closure needs -- see those files' header comments).
+# ---------------------------------------------------------------------------
+add_library(th01op_core STATIC
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/op_01.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/core/initexit.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/core/resident.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/hardware/graph.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/hardware/grppsafx.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/hardware/grp_text.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/hardware/egc.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/hardware/frmdelay.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/hardware/vsync.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/hardware/ztext.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../platform/x86real/pc98/font.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../platform/x86real/pc98/grcg.cpp
+	shim/op_globals.cpp
+	compat/x86real_shim.cpp
+)
+target_compile_definitions(th01op_core PRIVATE GAME=1)
+target_compile_options(th01op_core PRIVATE
+	-Wno-register
+	# Matches Borland's assumed-unsigned `char` default: shiftjis.hpp makes
+	# shiftjis_t plain `char` under REC98_PORT (so shiftjis string-table
+	# literals type-match `const shiftjis_t*` without a cast at every one of
+	# their many call sites), and this restores the unsigned-byte arithmetic
+	# (_ismbblead() et al.) that code assumes of it.
+	-funsigned-char
+	-include ${CMAKE_CURRENT_SOURCE_DIR}/compat/borland.hpp
+)
+target_link_libraries(th01op_core PRIVATE compat masterlib th01formats sndstub apphost)
+
+# ---------------------------------------------------------------------------
+# th01op: the M1 port executable. port/app/main_op.cpp resolves an assets
+# directory, fails with a clear message if TH01's data files aren't there
+# (see that file's header comment for why this happens before any original
+# game code runs), then calls th01/op_01.cpp's main_op() directly.
+# ---------------------------------------------------------------------------
+add_library(appassetsdir STATIC
+	app/assets_dir.cpp
+)
+target_include_directories(appassetsdir PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
+
+add_executable(th01op
+	app/main_op.cpp
+)
+target_link_libraries(th01op PRIVATE th01op_core appassetsdir apphost compat)
+
+# ---------------------------------------------------------------------------
 # Tests: ppm golden-test helper + ctest unit/golden tests. No GitHub Actions
 # dependency -- port/ci.sh drives configure+build+ctest as the local merge
 # gate (see WORKFLOW.md).
@@ -256,3 +326,24 @@ add_executable(test_formats_cfg tests/formats_cfg_test.cpp)
 target_link_libraries(test_formats_cfg PRIVATE compat)
 target_compile_definitions(test_formats_cfg PRIVATE GAME=1)
 add_test(NAME formats_cfg COMMAND test_formats_cfg)
+
+# ---------------------------------------------------------------------------
+# th01op (T9 op-bringup) tests: the new compat/app shims this component adds
+# -- int86()/outportb()/inportb() dispatch, the Shift-JIS byte-helper
+# reimplementation, and the assets-directory resolution M1's "fail with a
+# clear message, not a hang" acceptance criterion depends on.
+# ---------------------------------------------------------------------------
+add_executable(test_x86real_shim tests/x86real_shim_test.cpp)
+target_link_libraries(test_x86real_shim PRIVATE th01op_core pc98emu shim compat SDL3::SDL3)
+add_test(NAME x86real_shim COMMAND test_x86real_shim)
+
+add_executable(test_mbstring_shim tests/mbstring_shim_test.cpp)
+target_link_libraries(test_mbstring_shim PRIVATE compat)
+add_test(NAME mbstring_shim COMMAND test_mbstring_shim)
+
+add_executable(test_assets_dir tests/assets_dir_test.cpp)
+target_link_libraries(test_assets_dir PRIVATE appassetsdir)
+target_compile_definitions(test_assets_dir PRIVATE
+	PORT_TESTS_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}"
+)
+add_test(NAME assets_dir COMMAND test_assets_dir)

@@ -58,7 +58,28 @@ that reads PPM, or `xxd` a byte range) before committing.
 - `pc98emu/` -- PC-98 hardware emulation (VRAM/GRCG/EGC/text), no ReC98 header deps
 - `assets/` -- vendored third-party data (fonts, ...), with license files
 - `demo/` -- SDL3 presenter exercising the emulated hardware paths
+- `app/` -- SDL3 host (`host.{hpp,cpp}`) shared by port executables, plus
+  each executable's own entry point (`main_op.cpp` for `th01op`)
 - `tests/` -- `ppm` golden-test helper, plus ctest unit and golden tests
+
+## th01op (TH01 OP.EXE: title screen + options menu, M1)
+
+`th01op` runs `th01/op_01.cpp`'s `main_op()` directly (see
+`app/main_op.cpp`'s header comment for why it doesn't reproduce the original
+DOS multi-entrypoint `main()` dispatcher). Its dependency closure -- every
+original ReC98 TU `main_op()` actually calls into, and nothing from
+REIIDEN.EXE/FUUIN.EXE's gameplay/stage/boss code -- is the `th01op_core`
+CMake target; see that target's comment in `CMakeLists.txt` and
+`/Users/geekjapan/dev/projects/touhou/OP_DEPS.md` for the survey it's based
+on.
+
+Without the original game's data files, `th01op` resolves an assets
+directory (`$TH01_ASSETS_DIR`, else the path documented in SPEC.md, else the
+current directory) and exits with a clear message if it doesn't contain
+TH01's data (checked via `REIIDEN2.GRP`, the first file the title screen
+loads) -- see `app/main_op.cpp` and `app/assets_dir.{hpp,cpp}`. With the
+directory present, it starts the SDL host and renders the title screen for
+real.
 
 ## Third-party assets
 

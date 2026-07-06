@@ -8,12 +8,26 @@
 
 #include "x86real.h"
 
+#ifdef REC98_PORT
+#include "pc98emu/egc.hpp"
+#endif
+
 // Alternate version that sets the value first
+#ifdef REC98_PORT
+// REC98_PORT: `_asm { mov ax, val; mov dx, port; out dx, ax; }` is raw
+// inline x86 assembly (a 16-bit OUT), unimplementable on a host process.
+// Every REC98_PORT call site so far writes an EGC register
+// (platform/x86real/pc98/egc.hpp's EGC_*REG port range), so route through
+// pc98emu's EGC port emulation (port/pc98emu/egc.hpp) instead of a generic
+// word-output primitive.
+#define outport2(port, val) pc98emu_egc_outport((port), (val))
+#else
 #define outport2(port, val) _asm { \
 	mov ax, val; \
 	mov dx, port; \
 	out dx, ax; \
 }
+#endif
 
 // Should just be unwrapped wherever it appears. Code that directly uses T
 // would be much cleaner.
