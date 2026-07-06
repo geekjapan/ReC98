@@ -1,10 +1,11 @@
 // port/shim/masterlib/gfx.cpp
 // -----------------------------------------------------------------------
 // libs/master.lib/pc98_gfx.hpp entries actually called (unshadowed) from
-// the OP.EXE closure: egc_on/egc_off/egc_start (th01/hardware/egcstart.cpp,
-// th01/core/initexit.cpp), graph_start (th01/core/initexit.cpp), and
-// grcg_boxfill (th01/hardware/grppsafx.cpp). Also defines the
-// Palettes/PaletteTone globals and a real palette_show(), both needed
+// the OP.EXE/REIIDEN.EXE/FUUIN.EXE closures: egc_on/egc_off/egc_start
+// (th01/hardware/egcstart.cpp, th01/core/initexit.cpp), graph_start
+// (th01/core/initexit.cpp), grcg_boxfill (th01/hardware/grppsafx.cpp), and
+// graph_scrollup (th01/end/end.cpp, FUUIN.EXE closure only). Also defines
+// the Palettes/PaletteTone globals and a real palette_show(), both needed
 // internally by graph_start() (see graph_start.asm: it darkens the palette
 // before turning the display on).
 //
@@ -79,6 +80,19 @@ void graph_start(void) {
 	for(int plane = 0; plane < PLANE_COUNT; plane++) {
 		std::memset(pc98emu_planes[0][plane], 0, PLANE_SIZE);
 	}
+}
+
+void graph_scrollup(unsigned line) {
+	// th01/end/end.cpp's shake_then_boom() is the only FUUIN.EXE closure
+	// caller. Real hardware reprograms the GDC's display-partition scroll
+	// registers to shift the *displayed* start line without touching VRAM
+	// content (see th01/hardware/scrollup.cpp's z_vsync_wait_and_scrollup()
+	// for the equivalent GDC command sequence). pc98emu's VRAM/render model
+	// has no such scroll-offset concept yet -- adding it is a real feature,
+	// not something the no-assets bring-up milestone needs -- so this is a
+	// documented no-op for now, same spirit as graph_start()'s
+	// GRAPH_SHOW/GRAPH_400LINE handling above.
+	(void)line;
 }
 
 void grcg_boxfill(int x1, int y1, int x2, int y2) {

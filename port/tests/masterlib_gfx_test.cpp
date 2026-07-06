@@ -1,5 +1,5 @@
 // Unit test for port/shim/masterlib/gfx.cpp: egc_on/off/start, graph_start,
-// palette_show, and grcg_boxfill against the real
+// palette_show, grcg_boxfill, and graph_scrollup against the real
 // libs/master.lib/pc98_gfx.hpp declarations.
 
 #include <cstdio>
@@ -104,6 +104,17 @@ int main() {
 	expect(row1_untouched, "grcg_boxfill does not touch rows outside [y1, y2]");
 
 	pc98emu_outportb(0x7C, 0x00); // GC_OFF, leave GRCG in a clean state
+
+	// graph_scrollup: documented no-op (pc98emu has no raster-scroll model
+	// yet, see that function's header comment) -- just confirms it's
+	// callable and doesn't perturb VRAM.
+	std::memset(pc98emu_planes[0][pc98emu::PLANE_B], 0xAB, PLANE_SIZE);
+	graph_scrollup(8);
+	expect(
+		pc98emu_planes[0][pc98emu::PLANE_B][0] == 0xAB
+			&& pc98emu_planes[0][pc98emu::PLANE_B][PLANE_SIZE - 1] == 0xAB,
+		"graph_scrollup does not modify VRAM (documented no-op)"
+	);
 
 	if(g_failures == 0) {
 		std::printf("masterlib_gfx_test: all checks passed\n");
