@@ -1,6 +1,14 @@
 // Multiple entry points
 // ---------------------
 
+#ifdef REC98_PORT
+// REC98_PORT: unlike original ReC98 headers (each included at most once per
+// TU by convention), port/shim/masterlib/chain_exec.hpp also needs
+// entrypoint_t and re-includes this header itself; #pragma once keeps that
+// safe regardless of include order.
+#pragma once
+#endif
+
 enum entrypoint_t {
 	EP_OP,
 #if (GAME == 1)

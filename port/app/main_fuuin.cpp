@@ -11,13 +11,20 @@
 //
 // main_cutscene() always dereferences argv[1][0] (and, in the preview
 // branch, argv[1][1]) without an argc check -- on real hardware this is
-// always populated by whichever caller execl()'d into FUUIN.EXE. We supply
-// our own fixed "t1" (the hidden ending-preview flag: Makai route), rather
-// than the normal resident-structure-driven path, since a fresh port
-// process has no resident structure any OP.EXE/REIIDEN.EXE run in this
-// build ever created (same reasoning as main_reiiden.cpp's header comment
-// on resident_get()) -- "t1" is the only invocation that reaches real
-// content deterministically.
+// always populated by whichever caller execl()'d into FUUIN.EXE. T21 (see
+// /Users/geekjapan/dev/projects/touhou/PLAN.md's M5) made th01fuuin
+// reachable via a real execv() hand-off from th01main's game_cleared
+// handling (th01/main_01.cpp: `resident->end_flag = ...;
+// game_switch_binary(EP_CUTSCENE);`) -- port/shim/masterlib/chain_exec.cpp's
+// state file already restores that resident before main() reaches this
+// point, exactly as end_init() (the `argv[1][0] != 't'` branch) expects. So
+// this now passes real args whenever a resident structure exists,
+// exercising the actual ending path (score/rank/continues pulled from
+// resident_t) instead of always forcing the preview shortcut. Standalone
+// launches with no resident (this file's own historical use case, and still
+// the only option before a chain hand-off exists) keep the "t1" fallback --
+// port/tests/fuuin_ending_test.cpp exercises the real path directly instead,
+// seeding its own cleared-game resident (port/app/fuuin_bootstrap.hpp).
 //
 // No-assets acceptance (mirrors th01op/th01main): main_cutscene()'s normal
 // path would actually already exit gracefully without any assets (missing
@@ -35,6 +42,7 @@
 
 #include "port/app/assets_dir.hpp"
 #include "port/app/host.hpp"
+#include "port/compat/borland.hpp" // __seg (needed by th01/resident.hpp)
 
 #include <cstdio>
 #include <cstdlib>
@@ -42,6 +50,7 @@
 #include <unistd.h>
 
 #include "th01/pc98/entry.hpp" // main_cutscene()
+#include "th01/resident.hpp" // resident_get()
 
 namespace {
 
@@ -83,7 +92,10 @@ int main(int, char **) {
 		return 1;
 	}
 
-	const char *argv[] = { "fuuin", "t1" };
+	// Real ending path (resident-driven) when a chain hand-off seeded one;
+	// otherwise the "t1" preview shortcut, the only option with no resident
+	// -- see the header comment above.
+	const char *argv[] = { "fuuin", resident_get() ? "x" : "t1" };
 	int ret = main_cutscene(2, argv);
 
 	port::host_shutdown();

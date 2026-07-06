@@ -7,10 +7,10 @@
 //
 // 0. `entrypoint_exec()`: th01/core/initexit.cpp's game_switch_binary()
 //    (reached from fuuin_01.cpp's main_cutscene() after the ending finishes)
-//    calls this to restart the process at OP.EXE. Real implementation needs
-//    th01/pc98/entry.cpp's DOS multi-entrypoint dispatcher, which th01fuuin
-//    doesn't build either (see port/app/main_op.cpp's header comment) --
-//    same stub as the other two closures.
+//    calls this to restart the process at OP.EXE. T21 (see
+//    /Users/geekjapan/dev/projects/touhou/PLAN.md's M5) implements this for
+//    real via port/shim/masterlib/chain_exec.hpp: an execv() into th01op,
+//    replacing this process -- see that header for the design rationale.
 //
 // 1. `rank`: declared `extern` in th01/resident.hpp, defined in
 //    th01/main_01.cpp (REIIDEN.EXE's own entry TU) -- but read/written
@@ -33,14 +33,13 @@
 //    `end_flag != ES_NONE` (set in main_cutscene() before game_init()), so
 //    that branch is unreachable at runtime here -- these are link-time
 //    stubs only.
-#include <cstdio>
-#include <cstdlib>
-
 #include "th01/main/debug.hpp"
 #include "th01/main/player/bomb.hpp"
 #include "th01/pc98/entry.hpp"
 #include "th01/rank.h"
 #include "th01/resident.hpp"
+
+#include "port/shim/masterlib/chain_exec.hpp"
 
 uint8_t rank = RANK_NORMAL;
 bool16 mode_test = false;
@@ -56,11 +55,5 @@ void debug_show_game(void)
 
 void entrypoint_exec(entrypoint_t entrypoint)
 {
-	std::fprintf(
-		stderr,
-		"th01fuuin: entrypoint switch (%d) requested, but th01fuuin only "
-		"implements the FUUIN.EXE ending/registration closure -- exiting.\n",
-		static_cast<int>(entrypoint)
-	);
-	std::exit(0);
+	port::chain_exec(entrypoint, "th01fuuin");
 }

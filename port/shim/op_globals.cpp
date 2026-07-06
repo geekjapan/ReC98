@@ -24,20 +24,16 @@
 // 2. `entrypoint_exec()`: th01/core/initexit.cpp's game_switch_binary() (in
 //    turn reachable from op_01.cpp's start_game(), the "begin a new game /
 //    continue" menu action) calls this to restart the process at a
-//    different entry point. The real implementation
-//    (th01/pc98/entry.cpp) re-execs the current binary with a different
-//    argv[1] (`execl(_argv[0], ...)`), which needs the original DOS
-//    multi-entrypoint main() dispatcher (th01/pc98/entry.cpp/game_bat.cpp)
-//    that th01op deliberately doesn't build -- port/app/main_op.cpp calls
-//    main_op() directly instead (see that file's header comment). Starting
-//    a game is out of M1's scope (title screen only), so this is a
-//    clearly-logged stub rather than a real re-exec.
-#include <cstdio>
-#include <cstdlib>
-
+//    different entry point. T21 (see /Users/geekjapan/dev/projects/touhou/
+//    PLAN.md's M5) implements this for real via port/shim/masterlib/
+//    chain_exec.hpp: an execv() into the sibling th01main/th01fuuin
+//    binary, replacing this process -- see that header for the design
+//    rationale.
 #include "th01/hardware/input.hpp"
 #include "th01/pc98/entry.hpp"
 #include "th01/resident.hpp"
+
+#include "port/shim/masterlib/chain_exec.hpp"
 
 unsigned long frame_rand = 0;
 end_sequence_t end_flag = ES_NONE;
@@ -47,11 +43,5 @@ bool input_shot = false;
 
 void entrypoint_exec(entrypoint_t entrypoint)
 {
-	std::fprintf(
-		stderr,
-		"th01op: entrypoint switch (%d) requested, but th01op only "
-		"implements the OP.EXE title/menu closure (M1) -- exiting.\n",
-		static_cast<int>(entrypoint)
-	);
-	std::exit(0);
+	port::chain_exec(entrypoint, "th01op");
 }
