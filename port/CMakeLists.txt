@@ -438,6 +438,76 @@ target_compile_definitions(th01main PRIVATE GAME=1)
 target_link_libraries(th01main PRIVATE th01main_core appassetsdir apphost compat)
 
 # ---------------------------------------------------------------------------
+# th01fuuin_core: TH01 FUUIN.EXE's (ending slideshow, verdict screen, and
+# high-score registration) dependency closure -- th01/fuuin_01.cpp and
+# th01/fuuin_03.cpp (in turn th01/end/end.cpp, see that file's forwarding
+# #include) plus every original ReC98 TU they actually call into. Much of
+# this list mirrors th01op_core/th01main_core (each binary compiles its own
+# copies of the shared hardware TUs, see th01op_core's header comment for
+# why), with th01/hiscore/regist.cpp added for the high-score name-entry
+# screen (verdict_animate_and_regist_menu() -> regist_menu()) and
+# th01/hardware/input.cpp compiled in full (not just the two globals
+# op_globals.cpp extracts) since regist.cpp's regist_name_enter() actually
+# calls input_sense()/input_reset_sense() and reads input_up/down/lr/strike,
+# unlike op_01.cpp which senses BIOS keygroups directly.
+#
+# game/cutscene.cpp defines CUTSCENE_QUARTERS (the four ending-picture quarter
+# rects end_pic_show() blits from), a small self-contained cross-game TU with
+# no REC98_PORT concerns of its own.
+#
+# port/shim/fuuin_globals.cpp is this component's own new shim
+# (entrypoint_exec() stub; `rank`, a th01/resident.hpp global otherwise only
+# defined in th01/main_01.cpp, same "each entry TU needs its own copy of the
+# other two's globals" story as op_globals.cpp's frame_rand/end_flag; and
+# link-time-only stubs for the th01/main/debug.hpp / th01/main/player/
+# bomb.hpp names input.cpp's unreachable-here debug-menu branch references --
+# see that file's header comment). port/shim/masterlib/gfx.cpp also gained
+# graph_scrollup() (a documented no-op -- pc98emu has no raster-scroll model
+# yet) for th01/end/end.cpp's shake_then_boom().
+# ---------------------------------------------------------------------------
+add_library(th01fuuin_core STATIC
+	${CMAKE_CURRENT_SOURCE_DIR}/../game/cutscene.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/fuuin_01.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/fuuin_03.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/core/initexit.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/core/resident.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/hardware/graph.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/hardware/grppsafx.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/hardware/grp_text.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/hardware/egc.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/hardware/frmdelay.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/hardware/vsync.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/hardware/ztext.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/hardware/input.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/hardware/grp2xscs.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/hiscore/regist.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../platform/x86real/pc98/font.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../platform/x86real/pc98/grcg.cpp
+	shim/fuuin_globals.cpp
+	compat/x86real_shim.cpp
+)
+target_compile_definitions(th01fuuin_core PRIVATE GAME=1)
+target_compile_options(th01fuuin_core PRIVATE
+	-Wno-register
+	-funsigned-char
+	-include ${CMAKE_CURRENT_SOURCE_DIR}/compat/borland.hpp
+)
+target_link_libraries(th01fuuin_core PRIVATE compat masterlib th01formats sndstub apphost)
+
+# ---------------------------------------------------------------------------
+# th01fuuin: the FUUIN.EXE port executable. port/app/main_fuuin.cpp resolves
+# an assets directory, fails with a clear message if TH01's data files
+# aren't there (see that file's header comment for why this happens before
+# any original game code runs), then calls th01/fuuin_01.cpp's
+# main_cutscene() directly.
+# ---------------------------------------------------------------------------
+add_executable(th01fuuin
+	app/main_fuuin.cpp
+)
+target_compile_definitions(th01fuuin PRIVATE GAME=1)
+target_link_libraries(th01fuuin PRIVATE th01fuuin_core appassetsdir apphost compat)
+
+# ---------------------------------------------------------------------------
 # Tests: ppm golden-test helper + ctest unit/golden tests. No GitHub Actions
 # dependency -- port/ci.sh drives configure+build+ctest as the local merge
 # gate (see WORKFLOW.md).
@@ -557,6 +627,20 @@ add_test(NAME blitter_stub COMMAND test_blitter_stub)
 add_executable(test_tram_text tests/tram_text_test.cpp)
 target_link_libraries(test_tram_text PRIVATE th01main_core compat pc98emu)
 add_test(NAME tram_text COMMAND test_tram_text)
+
+# ---------------------------------------------------------------------------
+# th01fuuin (T12a fuuin-bringup) tests: the new shim this component adds --
+# port/shim/fuuin_globals.cpp's link-time-only globals/stubs (rank, mode_test,
+# bomb_doubletap_frame, debug_mem()/debug_show_game()) and
+# port/shim/masterlib/gfx.cpp's graph_scrollup() (tested alongside gfx.cpp's
+# other entries in masterlib_gfx_test.cpp above). th01fuuin_core's own TUs
+# (fuuin_01.cpp/fuuin_03.cpp/end.cpp/hiscore-regist.cpp) are exercised by
+# actually running the th01fuuin executable (port/ci.sh), same as
+# th01op/th01main's no-assets acceptance check.
+# ---------------------------------------------------------------------------
+add_executable(test_fuuin_globals tests/fuuin_globals_test.cpp)
+target_link_libraries(test_fuuin_globals PRIVATE th01fuuin_core compat)
+add_test(NAME fuuin_globals COMMAND test_fuuin_globals)
 
 # ---------------------------------------------------------------------------
 # th01formats tests: synthetic-data encoders (pf_synth.hpp) build minimal
