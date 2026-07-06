@@ -49,6 +49,16 @@ target_compile_options(compat INTERFACE -Wno-unknown-pragmas)
 target_link_libraries(compat INTERFACE pc98emu)
 
 # ---------------------------------------------------------------------------
+# shim/snd_stub: silent no-op implementation of th01/snd/mdrv2.h. MDRV98
+# reimplementation is a later milestone (T13); this just lets every TU that
+# calls into the sound API compile and link.
+# ---------------------------------------------------------------------------
+add_library(sndstub STATIC
+	shim/snd_stub.cpp
+)
+target_link_libraries(sndstub PRIVATE compat)
+
+# ---------------------------------------------------------------------------
 # Tests: ppm golden-test helper + ctest unit/golden tests. No GitHub Actions
 # dependency -- port/ci.sh drives configure+build+ctest as the local merge
 # gate (see WORKFLOW.md).
@@ -80,3 +90,7 @@ add_test(NAME compat_vram_ref COMMAND th01port_compat_test)
 add_executable(pc98emu_egc_test tests/egc_test.cpp)
 target_link_libraries(pc98emu_egc_test PRIVATE pc98emu)
 add_test(NAME pc98emu_egc_test COMMAND pc98emu_egc_test)
+
+add_executable(test_snd_stub tests/snd_stub_test.cpp)
+target_link_libraries(test_snd_stub PRIVATE sndstub compat)
+add_test(NAME snd_stub COMMAND test_snd_stub)
