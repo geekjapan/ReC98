@@ -1,4 +1,5 @@
 #include "pc98emu/vram.hpp"
+#include "pc98emu/text.hpp"
 
 #include <cstring>
 
@@ -89,4 +90,9 @@ void pc98emu_render(uint32_t *out_rgba) {
 				a;
 		}
 	}
+
+	// Text overlay: real PC-98 hardware mixes the digital text plane over
+	// the analog graphics output at the very end of the pipeline, so this
+	// runs after (and on top of) the graphics compositing above.
+	pc98emu_text_composite(out_rgba);
 }

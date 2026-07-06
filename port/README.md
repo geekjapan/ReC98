@@ -55,6 +55,17 @@ that reads PPM, or `xxd` a byte range) before committing.
 
 ## Layout
 
-- `pc98emu/` -- PC-98 hardware emulation (VRAM/GRCG/EGC), no ReC98 header deps
+- `pc98emu/` -- PC-98 hardware emulation (VRAM/GRCG/EGC/text), no ReC98 header deps
+- `assets/` -- vendored third-party data (fonts, ...), with license files
 - `demo/` -- SDL3 presenter exercising the emulated hardware paths
 - `tests/` -- `ppm` golden-test helper, plus ctest unit and golden tests
+
+## Third-party assets
+
+`port/assets/font/` vendors the Shinonome 16-dot JIS bitmap font (東雲フォント)
+from [The Electronic Font Open Laboratory](http://openlab.ring.gr.jp/efont/),
+used by `pc98emu/text.cpp` to render TRAM's halfwidth (8x16, JIS X0201) and
+fullwidth (16x16, JIS X0208) glyphs. **License: Public Domain** -- see
+`port/assets/font/LICENSE` and `AUTHORS` (copied verbatim from upstream) and
+`port/assets/font/README.md` for provenance and how the vendored `.bdf`
+files were produced from the upstream source distribution.

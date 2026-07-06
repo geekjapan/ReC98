@@ -65,8 +65,18 @@ namespace port {
 
 // Resolves a Turbo C++-style far seg:off address to a host pointer into the
 // pc98emu VRAM buffers. Only SEG_PLANE_B/R/G/E (from pc98.h) are currently
-// backed by pc98emu state; everything else (including SEG_TRAM_JIS/ATRB,
-// pending the T6 text-font component) asserts.
+// backed by pc98emu state; SEG_TRAM_JIS/ATRB still assert.
+//
+// pc98emu/text.hpp (T6) now exists, but deliberately does NOT expose a raw
+// byte-addressable TRAM buffer matching real hardware's SEG_TRAM_JIS/ATRB
+// layout: the exact encoding ReC98 pokes into that region for fullwidth
+// glyphs (th01/hardware/tram_x16.cpp's TRAMCursor::putkanji(), via
+// ztext.cpp's inline lead-byte trick) is still flagged upstream as
+// unverified ("more research and proof forthcoming"), and that byte pattern
+// happens to be ambiguous with halfwidth katakana codepoints too. Whoever
+// wires up peekb/pokeb-based TRAM access (T3/T9) should instead translate
+// at this layer into pc98emu_text_put_halfwidth()/put_fullwidth()'s clean,
+// unambiguous (code, atrb, half) cell API.
 //
 // The segment constants are hardware constants (real PC-98 memory map) and
 // are duplicated here as literals -- rather than referencing pc98.h's

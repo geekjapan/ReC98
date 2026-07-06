@@ -10,6 +10,7 @@
 #include "pc98emu/vram.hpp"
 #include "pc98emu/grcg.hpp"
 #include "pc98emu/egc.hpp"
+#include "pc98emu/text.hpp"
 
 // Zeroes all VRAM (both pages, all planes), resets the palette to black,
 // resets GRCG/EGC state, and sets both the accessible and shown page to 0.
