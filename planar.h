@@ -8,6 +8,10 @@
 
 #include "pc98.h"
 
+#ifdef REC98_PORT
+#include "port/compat/vram_ref.hpp"
+#endif
+
 // 1bpp types, describing horizontal lines of 8, 16, or 32 pixels.
 typedef uint8_t dots8_t;
 typedef uint16_t dots16_t;
@@ -154,8 +158,17 @@ static inline vram_offset_t vram_offset_divshift_wtf(screen_x_t x, vram_y_t y) {
 	(SEG_PLANE_##plane + (((y * ROW_SIZE) + (x / BYTE_DOTS)) / 16)) \
 )
 
+#ifdef REC98_PORT
+// GRCG-aware stand-in: routes through pc98emu's grcg_vram_read/write()
+// instead of touching VRAM_PLANE_* directly, so RMW/TDW fan-out behaves
+// identically whether code goes through VRAM_CHUNK or grcg_put(). See
+// port/compat/vram_ref.hpp.
+#define VRAM_CHUNK(plane, offset, bit_count) \
+	VramRef<dots##bit_count##_t>(PL_##plane, offset)
+#else
 #define VRAM_CHUNK(plane, offset, bit_count) \
 	*(dots##bit_count##_t far *)(VRAM_PLANE_##plane + offset)
+#endif
 
 #define VRAM_SNAP(dst, plane, offset, bit_count) \
 	dst = VRAM_CHUNK(plane, offset, bit_count);

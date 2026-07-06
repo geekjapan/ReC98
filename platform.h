@@ -32,6 +32,22 @@ typedef void ( far pascal * far   farfunc_t_far)(void);
 typedef void (     pascal *near     func_t_near)(void);
 typedef void (     pascal * far      func_t_far)(void);
 typedef void (     pascal *              func_t)(void);
+#elif defined(REC98_PORT)
+// Host build: real <stdint.h>, real C++ bool (passthrough, not redefined),
+// and plain function-pointer typedefs since `far`/`near`/`pascal` don't mean
+// anything in a flat address space (they're also `#define`d away to nothing
+// by compat/borland.hpp, but these typedefs skip them entirely rather than
+// relying on that).
+#include <stdint.h>
+typedef int bool16;
+
+typedef void (*nearfunc_t_near)(void);
+typedef void (*farfunc_t_near)(void);
+typedef void (*nearfunc_t_far)(void);
+typedef void (*farfunc_t_far)(void);
+typedef void (*func_t_near)(void);
+typedef void (*func_t_far)(void);
+typedef void (*func_t)(void);
 #else
 #error This code can currently only be compiled on Borland's 16-bit DOS compilers. Ideally, you'd only have to declare <stdint.h> types for your compiler here though?
 #endif
