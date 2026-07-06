@@ -25,10 +25,23 @@
 //   [2..3]   u16 channel_count
 //   [4..5]   u16 chip: 0=OPM, 1=OPN, 2=OPLL (only 1 is supported)
 //   channel table: channel_count * (u16 location, u16 id), id==0 means the
-//     slot is unused. For OPN, MDRV2's MML letter convention maps table
-//     slots 0-2 to FM channels 1-3 and slots 3-5 to SSG channels 1-3 (see
-//     ChannelRole below); ids 0x80-0x85 ("A".."F") are the only ones this
-//     parser expects to see for an OPN-chip file.
+//     slot is unused. The role a slot plays is determined by its `id`, NOT
+//     its position in the table -- real TH01 .MDT files always emit 13
+//     slots, most of them not playable on OPN hardware (see ChannelRole
+//     below). This was confirmed against Lmocinemod's MDTParsingTools
+//     decompiler (github.com/Lmocinemod/MDTParsingTools, mdt_decomp_rip.py's
+//     CHANNEL_FLAGS table and its `id & 0x40`/`id & 0x80` FM-vs-SSG opcode
+//     dispatch) run on real assets: ids 0x80/0x81/0x82 ("A"/"B"/"C") are
+//     FM1-3, and ids 0x40/0x41/0x42 ("I"/"J"/"K") are SSG1-3 -- NOT
+//     0x83-0x85 ("D"/"E"/"F") as an earlier version of this parser assumed
+//     (that assumed slots 0-2/3-5 map 1:1 to FM/SSG by position). ids
+//     0x83-0x85 decompile with FM-instrument-select opcode semantics, same
+//     as A-C, so they're presumably extra FM4-6 voices for richer chips
+//     (OPNA has 6 FM channels) that a plain YM2203 (OPN, TH01's chip) has no
+//     hardware for; id 0x10 ("L") is a RHYTHM/sample track, which OPN also
+//     lacks. All of these -- and any other id -- resolve to
+//     ChannelRole::Unsupported and are never played, matching what the real
+//     MDRV98.COM TSR would do when configured for OPN.
 //   [..+0]   u16 fm_instrument_table_location
 //   [..+2]   u16 ssg_envelope_table_location
 //   [..+4]   u16 title_location (Shift-JIS text, '$' (0x24) terminated)
@@ -52,11 +65,16 @@
 //       [30]     bits0-6 PMD (OPM LFO depth, unused for OPN)
 //       [31]     unused (per MDTParsingTools: doesn't round-trip, doesn't
 //                 seem to affect playback either)
-//   ssg_envelope_table: 6-byte blocks, running to EOF. Only raw[0]'s low
-//     nibble (an initial volume 0-15) is currently consumed -- MDRV2's SSG
-//     hardware-envelope semantics aren't reverse-engineered here, so
-//     SSG channels play as flat-volume square waves. See mdrv2_engine's
-//     header comment.
+//   ssg_envelope_table: 6-byte blocks, running to EOF. Not consumed at all
+//     currently -- MDRV2's SSG hardware-envelope semantics aren't
+//     reverse-engineered here (MDTParsingTools' own author couldn't resolve
+//     them either, see its SSGEnvelope class), so SSG channels play as
+//     flat-volume square waves. In every real TH01 .MDT file, raw[0] is
+//     always 0xFF (so even a naive "low nibble = initial volume 0-15" read
+//     would always yield the same constant 15 and change nothing); raw[4]
+//     and raw[5] vary per envelope and are presumably rate/period fields,
+//     but their exact meaning is unconfirmed. See mdrv2_engine's header
+//     comment.
 //   channel/macro opcode streams: start at each channel table entry's
 //     `location` (and, for macros, at the location embedded in a macro-call
 //     opcode). See mdt_format.cpp's kOpcodeArgBytes table for the full
@@ -91,9 +109,10 @@ struct MdtSsgEnvelope {
 	uint8_t raw[6];
 };
 
-// A channel table slot's hardware role. TH01/OPN-only: slots 0-2 are the 3
-// FM channels, slots 3-5 are the 3 SSG channels (see mdt_format.hpp's header
-// comment on the MML-letter convention this assumes).
+// A channel table slot's hardware role, determined entirely by `id` (see
+// this file's header comment for the real id-to-role mapping and how it was
+// confirmed). TH01 targets plain OPN: exactly 3 FM + 3 SSG channels exist in
+// hardware, so ids outside the 6 recognized below are never playable.
 enum class ChannelRole {
 	Fm1,
 	Fm2,
@@ -101,9 +120,11 @@ enum class ChannelRole {
 	Ssg1,
 	Ssg2,
 	Ssg3,
-	Unsupported, // slot index >= 6, or an id this parser doesn't recognize
+	Unsupported, // any id besides 0x80-0x82 (FM1-3) or 0x40-0x42 (SSG1-3)
 };
 
+// `slot_index` is unused (role comes from `id`) but kept in the signature
+// since callers already have both on hand from the channel table.
 ChannelRole channel_role_for_slot(size_t slot_index, uint16_t id);
 
 struct MdtSong {

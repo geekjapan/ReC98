@@ -35,9 +35,10 @@ inline void put_bytes(std::vector<uint8_t> &v, size_t off, std::initializer_list
 }
 
 // A single channel table slot: `id` 0 means disabled. Per mdt_format.hpp's
-// slot-position convention, slot index 0-2 are FM1-3 and 3-5 are SSG1-3;
-// build() always emits exactly 6 slots (id 0x80-0x85 for the enabled ones,
-// matching MDTParsingTools' CHANNEL_FLAGS "A".."F").
+// header comment, role comes from `id`, not table position: build() always
+// emits exactly 6 slots, assigning indices 0-2 real FM1-3 ids (0x80-0x82,
+// "A"-"C") and indices 3-5 real SSG1-3 ids (0x40-0x42, "I"-"K"), matching
+// MDTParsingTools' CHANNEL_FLAGS table and real TH01 .MDT files.
 struct ChannelSpec {
 	bool enabled = false;
 	std::vector<uint8_t> opcodes; // this channel's opcode stream (no location prefix)
@@ -80,9 +81,11 @@ inline std::vector<uint8_t> build(
 		cursor += channels[i].opcodes.size();
 	}
 
+	// Real id values (see mdt_format.hpp): FM1-3 = 0x80-0x82, SSG1-3 = 0x40-0x42.
+	constexpr uint16_t kChannelIds[6] = {0x80, 0x81, 0x82, 0x40, 0x41, 0x42};
 	for(int i = 0; i < 6; i++) {
 		put_u16(f, table_off + i * 4 + 0, locations[i]);
-		put_u16(f, table_off + i * 4 + 2, channels[i].enabled ? static_cast<uint16_t>(0x80 + i) : 0);
+		put_u16(f, table_off + i * 4 + 2, channels[i].enabled ? kChannelIds[i] : 0);
 	}
 
 	// Title goes before the FM instrument table: mdt_parse() (matching the
