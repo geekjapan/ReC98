@@ -11,6 +11,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 list(APPEND CMAKE_PREFIX_PATH /opt/homebrew)
 find_package(SDL3 CONFIG REQUIRED)
+find_package(Threads REQUIRED)
 
 # ---------------------------------------------------------------------------
 # pc98emu: software emulation of the PC-98 planar VRAM / GRCG / EGC hardware.
@@ -737,3 +738,15 @@ target_compile_definitions(test_title_screen_golden PRIVATE
 )
 add_test(NAME title_screen_golden COMMAND test_title_screen_golden)
 set_tests_properties(title_screen_golden PROPERTIES SKIP_RETURN_CODE 77)
+
+# M2 (SPEC.md) headless menu navigation: drives the real main_op() closure
+# through HIT KEY -> main menu -> Config -> Music Test -> quit by injecting
+# synthetic key states (port::input_test_set_keys()), verifying via
+# th01/op_01.cpp's own menu_sel/menu_id/quit globals. Skips (doesn't fail)
+# when the real TH01 assets aren't available, same as title_screen_golden.
+add_executable(test_menu_nav tests/menu_nav_test.cpp)
+target_link_libraries(test_menu_nav PRIVATE
+	th01op_core appassetsdir apphost pc98emu shim compat SDL3::SDL3 Threads::Threads
+)
+add_test(NAME menu_nav COMMAND test_menu_nav)
+set_tests_properties(menu_nav PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)

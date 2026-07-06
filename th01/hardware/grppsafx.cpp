@@ -7,6 +7,14 @@
 // Shift-JIS helpers this file calls (_ismbblead/_ismbbkana/_mbcjmstojis);
 // see port/compat/mbstring_shim.hpp for their host reimplementation.
 #include "port/compat/mbstring_shim.hpp"
+// REC98_PORT: graph_putsa_fx() below writes glyph dots through a raw
+// MK_FP(SEG_PLANE_B, ...) pointer, exactly like the original hardware code.
+// On real PC-98 hardware, the GRCG intercepts that write and fans it out to
+// all 4 planes (RMW mode); port/compat/vram_ref.hpp's VramRef is what
+// reproduces that fan-out on the host (the same mechanism planar.h's
+// VRAM_CHUNK()/grcg_put() already route through), so use it here too instead
+// of a plain byte pointer, which would only ever touch plane B.
+#include "port/compat/vram_ref.hpp"
 #else
 #include <mbctype.h>
 #include <mbstring.h>
@@ -57,9 +65,13 @@ void pascal graph_putsa_fx(
 
 	while(str[0]) {
 		font_glyph_t glyph;
+#ifdef REC98_PORT
+		vram_offset_t vram_offset = vram_offset_shift(left, top);
+#else
 		dots8_t far *vram = reinterpret_cast<dots8_t far *>(
 			MK_FP(SEG_PLANE_B, vram_offset_shift(left, top))
 		);
+#endif
 		int first_bit = (left & BYTE_MASK);
 		jis_t codepoint;
 
@@ -148,15 +160,34 @@ void pascal graph_putsa_fx(
 				}
 			}
 			if(first_bit) {
+#ifdef REC98_PORT
+				VramRef<dots8_t>(PL_B, vram_offset) =
+					static_cast<dots8_t>(glyph_row >> (first_bit + BYTE_DOTS));
+				VramRef<dots8_t>(PL_B, vram_offset + 1) =
+					static_cast<dots8_t>(glyph_row >> (first_bit +         0));
+				VramRef<dots8_t>(PL_B, vram_offset + 2) =
+					static_cast<dots8_t>(glyph_row << (BYTE_DOTS - first_bit));
+#else
 				vram[0] = (glyph_row >> (first_bit + BYTE_DOTS));
 				vram[1] = (glyph_row >> (first_bit +         0));
 				vram[2] = (glyph_row << (BYTE_DOTS - first_bit));
+#endif
 			} else {
+#ifdef REC98_PORT
+				VramRef<dots_t(GLYPH_FULL_W)>(PL_B, vram_offset) = (
+					__rotr__(glyph_row, 8)
+				);
+#else
 				*reinterpret_cast<dots_t(GLYPH_FULL_W) far *>(vram) = (
 					__rotr__(glyph_row, 8)
 				);
+#endif
 			}
+#ifdef REC98_PORT
+			vram_offset += ROW_SIZE;
+#else
 			vram += ROW_SIZE;
+#endif
 		}
 		left += glyph.tag.w;
 	}
