@@ -12,3 +12,4 @@ tup-generate.vardict
 
 # SDL port build dir
 port/build/
+.orca/
