@@ -254,9 +254,13 @@ template<class T> struct HMem {
 		hmem_free(reinterpret_cast<void __seg *>(block));
 	}
 
+#ifndef REC98_PORT
+	// far and __seg both vanish under REC98_PORT (compat/borland.hpp), which
+	// would make this an identical redeclaration of the overload above.
 	static void free(T __seg *&block) {
 		hmem_free(reinterpret_cast<void __seg *>(block));
 	}
+#endif
 };
 
 // Type-safe resident structure allocation and retrieval

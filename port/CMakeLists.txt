@@ -79,6 +79,22 @@ target_include_directories(shim PUBLIC
 target_link_libraries(shim PUBLIC SDL3::SDL3)
 
 # ---------------------------------------------------------------------------
+# shim/masterlib: subset of libs/master.lib/master.hpp + pc98_gfx.hpp needed
+# by TH01 OP.EXE's dependency closure (file I/O, resident data, keyboard
+# init, RNG, EGC/GRCG/graph init). See shim/masterlib/README.md for the
+# exact function inventory and what's deliberately not implemented.
+# key_sense_bios() calls into shim/input's key_sense(), hence the link dep.
+# ---------------------------------------------------------------------------
+add_library(masterlib STATIC
+	shim/masterlib/file_io.cpp
+	shim/masterlib/resdata.cpp
+	shim/masterlib/keyboard.cpp
+	shim/masterlib/random.cpp
+	shim/masterlib/gfx.cpp
+)
+target_link_libraries(masterlib PRIVATE compat shim)
+
+# ---------------------------------------------------------------------------
 # Tests: ppm golden-test helper + ctest unit/golden tests. No GitHub Actions
 # dependency -- port/ci.sh drives configure+build+ctest as the local merge
 # gate (see WORKFLOW.md).
@@ -125,3 +141,26 @@ add_test(NAME pc98emu_text_test COMMAND pc98emu_text_test)
 add_executable(test_snd_stub tests/snd_stub_test.cpp)
 target_link_libraries(test_snd_stub PRIVATE sndstub compat)
 add_test(NAME snd_stub COMMAND test_snd_stub)
+
+add_executable(test_masterlib_file_io tests/masterlib_file_io_test.cpp)
+target_link_libraries(test_masterlib_file_io PRIVATE masterlib compat)
+target_compile_definitions(test_masterlib_file_io PRIVATE
+	PORT_TESTS_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}"
+)
+add_test(NAME masterlib_file_io COMMAND test_masterlib_file_io)
+
+add_executable(test_masterlib_resdata tests/masterlib_resdata_test.cpp)
+target_link_libraries(test_masterlib_resdata PRIVATE masterlib compat)
+add_test(NAME masterlib_resdata COMMAND test_masterlib_resdata)
+
+add_executable(test_masterlib_random tests/masterlib_random_test.cpp)
+target_link_libraries(test_masterlib_random PRIVATE masterlib compat)
+add_test(NAME masterlib_random COMMAND test_masterlib_random)
+
+add_executable(test_masterlib_gfx tests/masterlib_gfx_test.cpp)
+target_link_libraries(test_masterlib_gfx PRIVATE masterlib compat)
+add_test(NAME masterlib_gfx COMMAND test_masterlib_gfx)
+
+add_executable(test_masterlib_keyboard tests/masterlib_keyboard_test.cpp)
+target_link_libraries(test_masterlib_keyboard PRIVATE masterlib shim compat)
+add_test(NAME masterlib_keyboard COMMAND test_masterlib_keyboard)
