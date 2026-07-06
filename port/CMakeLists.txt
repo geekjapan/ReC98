@@ -576,9 +576,11 @@ add_test(NAME snd_stub COMMAND test_snd_stub)
 # ---------------------------------------------------------------------------
 # T13 (sound-m4) tests: OPN chip tone playback, MDT binary format parsing
 # (synthetic fixtures, see tests/mdt_synth.hpp), and the MDRV2 sequencer
-# engine driving it end-to-end. No real TH01 .MDT assets are available in
-# this environment -- see mdt_format.hpp/mdrv2_engine.hpp for what's
-# reverse-engineered vs. approximated.
+# engine driving it end-to-end. T20 added mdt_real_songs, an assets-gated
+# smoke test that renders the whole real TH01 .MDT corpus (see
+# mdt_format.hpp/mdrv2_engine.hpp for what's reverse-engineered vs.
+# approximated), and tools/mdt_render.cpp, a CLI dev-tool for rendering one
+# song to a .wav for a human to listen to.
 # ---------------------------------------------------------------------------
 add_executable(test_opn_chip tests/opn_chip_test.cpp)
 target_link_libraries(test_opn_chip PRIVATE portaudio_opn)
@@ -591,6 +593,14 @@ add_test(NAME mdt_format COMMAND test_mdt_format)
 add_executable(test_mdrv2_engine tests/mdrv2_engine_test.cpp)
 target_link_libraries(test_mdrv2_engine PRIVATE sndmdt)
 add_test(NAME mdrv2_engine COMMAND test_mdrv2_engine)
+
+add_executable(mdt_render tools/mdt_render.cpp)
+target_link_libraries(mdt_render PRIVATE sndmdt)
+
+add_executable(test_mdt_real_songs tests/mdt_real_songs_test.cpp)
+target_link_libraries(test_mdt_real_songs PRIVATE sndmdt appassetsdir)
+add_test(NAME mdt_real_songs COMMAND test_mdt_real_songs)
+set_tests_properties(mdt_real_songs PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 120)
 
 add_executable(test_masterlib_file_io tests/masterlib_file_io_test.cpp)
 target_link_libraries(test_masterlib_file_io PRIVATE masterlib compat)
