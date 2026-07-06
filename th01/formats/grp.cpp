@@ -101,9 +101,21 @@ int grp_put(const char *fn, grp_put_flag_t flag)
 	// on implementation details, but it is, in fact, officially sanctioned
 	// by PILOADC.DOC. Slightly ugly how we have also to replicate PiLoad's
 	// paragraph rounding of the address, though...
+#ifdef REC98_PORT
+	// REC98_PORT: FP_SEG()/FP_OFF() truncate a real pointer to 16 bits to
+	// round-trip it through MK_FP(), which only makes sense for segmented
+	// real-mode addresses. On a flat host, round the pointer itself up to
+	// the same 16-byte (paragraph) boundary instead. Cast to int8_t (not
+	// char): REC98_PORT's <cstdint> makes those distinct types, unlike
+	// platform.h's Borland-branch `typedef char int8_t`.
+	grp_buf_aligned = reinterpret_cast<const int8_t *>(
+		(reinterpret_cast<uintptr_t>(grp_buf) + 15) & ~static_cast<uintptr_t>(15)
+	);
+#else
 	grp_buf_aligned = reinterpret_cast<const char *>(MK_FP(
 		FP_SEG(grp_buf), ((FP_OFF(grp_buf) + 15) & ~15)
 	));
+#endif
 	grp_palette = *reinterpret_cast<const Palette4 *>(grp_buf_aligned + 0x100);
 
 	if(flag & GPF_PALETTE_SHOW) {

@@ -6,6 +6,14 @@
 
 #include "th01/formats/sprfmt_h.hpp"
 #include "th01/formats/pf.hpp"
+#ifdef REC98_PORT
+// REC98_PORT: this header uses Planar<>/dots8_t/vram_offset_t itself (below)
+// and also drags in th01/hardware/graph.h, which needs the same root
+// planar.h typedefs (dots16_t, ...) -- see th01/formats/grc.cpp for the same
+// issue and full explanation (quote-included "planar.h" resolves to the
+// sibling th01/hardware/planar.h, not the root one, from within graph.h).
+#include "planar.h"
+#endif
 #include "th01/hardware/graph.h"
 
 #define BOS_MAGIC "BOSS"

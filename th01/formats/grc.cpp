@@ -1,3 +1,12 @@
+#ifdef REC98_PORT
+// REC98_PORT: th01/hardware/graph.h expects pc98.h's and the root planar.h's
+// typedefs (screen_x_t, vram_y_t, vc2, page_t, dots16_t, ...) to already be
+// visible. Most .cpp TUs get this transitively through an earlier include
+// (e.g. th01/hardware/egc.h), but this file's first include is graph.h
+// itself, and its quote-included "planar.h" resolves to the *sibling*
+// th01/hardware/planar.h (TH01-specific macros only), not the root planar.h.
+#include "planar.h"
+#endif
 #include "th01/hardware/graph.h"
 #include "th01/formats/pf.hpp"
 #include "th01/formats/grc.hpp"
@@ -10,8 +19,23 @@ int grc_load(main_grc_slot_t slot, const char fn[PF_FN_LEN])
 
 	arc_file_open(fn);
 	arc_file_seek(offsetof(grc_header_t, vram_w), SEEK_SET);
+#ifdef REC98_PORT
+	// REC98_PORT: grc_t's vram_w/h are `vram_byte_amount_t`/`pixel_t` (both
+	// plain `int`, 4 bytes on a modern host), but arc_file_read_near() reads
+	// sizeof(var) bytes -- and the on-disk grc_header_t stores both fields
+	// as int16_t (2 bytes, matching Borland's original 16-bit `int`).
+	// Reading 4 bytes per field here would consume h's on-disk bytes as
+	// part of vram_w and misalign everything after. Read the on-disk width
+	// explicitly instead.
+	int16_t vram_w_disk, h_disk;
+	arc_file_read(reinterpret_cast<uint8_t *>(&vram_w_disk), sizeof(vram_w_disk));
+	arc_file_read(reinterpret_cast<uint8_t *>(&h_disk), sizeof(h_disk));
+	grc_images[slot].vram_w = vram_w_disk;
+	grc_images[slot].h = h_disk;
+#else
 	arc_file_read_near(grc_images[slot].vram_w);
 	arc_file_read_near(grc_images[slot].h);
+#endif
 
 	arc_file_read_far(header);
 	grc_images[slot].image_count = header.image_count;

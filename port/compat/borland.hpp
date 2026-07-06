@@ -40,11 +40,13 @@
 #define __cdecl
 #define interrupt
 
-// Turbo C++'s segment-qualified pointer keyword (`void __seg *`, used by
-// master.lib's hmem_/resdata_/dos_free() family for DOS segment handles).
-// Not a real clang keyword; meaningless in a flat address space, same as
-// far/near above.
+// Turbo C++'s segment-qualified pointer keywords (`void __seg *`/`void __ds
+// *`, used by master.lib's hmem_/resdata_/dos_free() family for DOS segment
+// handles, and by libs/piloadc's PiLoad declarations for "current DS"
+// pointers respectively). Not real clang keywords; meaningless in a flat
+// address space, same as far/near above.
 #define __seg
+#define __ds
 
 // Pseudo registers
 // ----------------
