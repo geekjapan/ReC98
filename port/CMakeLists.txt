@@ -65,6 +65,69 @@ add_library(sndstub STATIC
 target_link_libraries(sndstub PRIVATE compat)
 
 # ---------------------------------------------------------------------------
+# ymfm (vendored subset): BSD-3 YM2203/OPN chip emulation core. Only the
+# translation-unit closure needed for ymfm::ym2203 is vendored -- see
+# port/third_party/ymfm/README.md for exactly what and why.
+# ---------------------------------------------------------------------------
+add_library(ymfm STATIC
+	third_party/ymfm/src/ymfm_opn.cpp
+	third_party/ymfm/src/ymfm_ssg.cpp
+	third_party/ymfm/src/ymfm_adpcm.cpp
+)
+target_include_directories(ymfm PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/ymfm/src)
+# Third-party code: don't hold it to this project's own warning bar.
+target_compile_options(ymfm PRIVATE -w)
+
+# ---------------------------------------------------------------------------
+# audio/opn_chip: thin wrapper around ymfm::ym2203 (register write + mono PCM
+# render). This is TH01's actual sound hardware target -- see SPEC.md/T13.
+# ---------------------------------------------------------------------------
+add_library(portaudio_opn STATIC
+	audio/opn_chip.cpp
+)
+target_include_directories(portaudio_opn PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_link_libraries(portaudio_opn PRIVATE ymfm)
+
+# ---------------------------------------------------------------------------
+# audio/audio_out: SDL3 audio device output, fed by a background thread
+# pulling PCM from a Renderer callback. Not exercised by ctest (opening a
+# real playback device isn't guaranteed in headless/CI); see
+# audio_out.hpp's header comment.
+# ---------------------------------------------------------------------------
+add_library(portaudio_out STATIC
+	audio/audio_out.cpp
+)
+target_include_directories(portaudio_out PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_link_libraries(portaudio_out PUBLIC SDL3::SDL3)
+
+# ---------------------------------------------------------------------------
+# snd/mdt_format + snd/mdrv2_engine: MDRV2 .MDT binary parser and the
+# opcode-stream sequencer that drives port::audio::OpnChip in real time --
+# TH01's MDRV98 driver semantics, reimplemented on ymfm. See
+# mdt_format.hpp/mdrv2_engine.hpp's header comments for scope, provenance,
+# and known limitations.
+# ---------------------------------------------------------------------------
+add_library(sndmdt STATIC
+	snd/mdt_format.cpp
+	snd/mdrv2_engine.cpp
+)
+target_include_directories(sndmdt PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_link_libraries(sndmdt PUBLIC portaudio_opn)
+
+# ---------------------------------------------------------------------------
+# shim/snd_mdrv2: real (non-stub) implementation of th01/snd/mdrv2.h, built
+# on sndmdt + portaudio_out. Effect sounds (.MDE) aren't reverse-engineered
+# yet, so se_load()/se_play() remain no-ops -- see snd_mdrv2.cpp's header
+# comment. This is what th01op_core links for the M4 milestone (OP BGM
+# actually playing); `sndstub` above is kept around for its own test and as
+# a documented fallback.
+# ---------------------------------------------------------------------------
+add_library(sndmdrv2 STATIC
+	shim/snd_mdrv2.cpp
+)
+target_link_libraries(sndmdrv2 PRIVATE compat sndmdt portaudio_out)
+
+# ---------------------------------------------------------------------------
 # shim/input: SDL3 keyboard state -> PC-98 BIOS keygroup bitmap (key_sense()),
 # consumed by th01/hardware/input.cpp exactly like the original
 # KEY_SENSE.ASM/BIOS INT 18h path.
@@ -177,7 +240,7 @@ target_compile_options(th01op_core PRIVATE
 	-funsigned-char
 	-include ${CMAKE_CURRENT_SOURCE_DIR}/compat/borland.hpp
 )
-target_link_libraries(th01op_core PRIVATE compat masterlib th01formats sndstub apphost)
+target_link_libraries(th01op_core PRIVATE compat masterlib th01formats sndmdrv2 apphost)
 
 # ---------------------------------------------------------------------------
 # th01op: the M1 port executable. port/app/main_op.cpp resolves an assets
@@ -242,6 +305,25 @@ add_test(NAME pc98emu_text_test COMMAND pc98emu_text_test)
 add_executable(test_snd_stub tests/snd_stub_test.cpp)
 target_link_libraries(test_snd_stub PRIVATE sndstub compat)
 add_test(NAME snd_stub COMMAND test_snd_stub)
+
+# ---------------------------------------------------------------------------
+# T13 (sound-m4) tests: OPN chip tone playback, MDT binary format parsing
+# (synthetic fixtures, see tests/mdt_synth.hpp), and the MDRV2 sequencer
+# engine driving it end-to-end. No real TH01 .MDT assets are available in
+# this environment -- see mdt_format.hpp/mdrv2_engine.hpp for what's
+# reverse-engineered vs. approximated.
+# ---------------------------------------------------------------------------
+add_executable(test_opn_chip tests/opn_chip_test.cpp)
+target_link_libraries(test_opn_chip PRIVATE portaudio_opn)
+add_test(NAME opn_chip COMMAND test_opn_chip)
+
+add_executable(test_mdt_format tests/mdt_format_test.cpp)
+target_link_libraries(test_mdt_format PRIVATE sndmdt)
+add_test(NAME mdt_format COMMAND test_mdt_format)
+
+add_executable(test_mdrv2_engine tests/mdrv2_engine_test.cpp)
+target_link_libraries(test_mdrv2_engine PRIVATE sndmdt)
+add_test(NAME mdrv2_engine COMMAND test_mdrv2_engine)
 
 add_executable(test_masterlib_file_io tests/masterlib_file_io_test.cpp)
 target_link_libraries(test_masterlib_file_io PRIVATE masterlib compat)
