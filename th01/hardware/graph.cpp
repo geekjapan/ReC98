@@ -5,6 +5,12 @@
 // Turbo C++ header providing memcpy()/memset(), which <cstring> covers on a
 // host toolchain.
 #include <cstring>
+// REC98_PORT: z_graph_clear() below writes through a raw VRAM_PLANE_B
+// pointer while the GRCG is armed in RMW mode -- like th01/hardware/
+// grppsafx.cpp's graph_putsa_fx(), that needs to fan out to all 4 planes the
+// way the real GRCG chip does, which a plain pointer write doesn't do on the
+// host. See port/compat/vram_ref.hpp.
+#include "port/compat/vram_ref.hpp"
 #else
 #include <dos.h>
 #include <mem.h>
@@ -244,10 +250,18 @@ void z_palette_set_show(vc2 col, svc_comp2 r, svc_comp2 g, svc_comp2 b)
 /// --------------------
 void z_graph_clear()
 {
-	dots8_t far *plane = reinterpret_cast<dots8_t __seg *>(SEG_PLANE_B);
-
 	grcg_setcolor_rmw(0);
+#ifdef REC98_PORT
+	// REC98_PORT: see this file's top-of-file comment -- a raw pointer
+	// memset() here would only ever touch plane B. PLANE_SIZE (32000) is a
+	// multiple of 4, so this can go 32 bits at a time.
+	for(uint16_t offset = 0; offset < PLANE_SIZE; offset += sizeof(uint32_t)) {
+		VramRef<uint32_t>(PL_B, offset) = 0xFFFFFFFF;
+	}
+#else
+	dots8_t far *plane = reinterpret_cast<dots8_t __seg *>(SEG_PLANE_B);
 	memset(plane, 0xFF, PLANE_SIZE);
+#endif
 	grcg_off_func();
 }
 

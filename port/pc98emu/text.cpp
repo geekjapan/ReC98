@@ -211,8 +211,17 @@ void pc98emu_font_kanji_rows(uint16_t jis_code, uint16_t rows_out[pc98emu::CELL_
 	load_fonts();
 	auto it = g_kanji_glyph.find(jis_code);
 	for(int y = 0; y < pc98emu::CELL_H; y++) {
-		rows_out[y] = (it == g_kanji_glyph.end())
+		uint16_t row = (it == g_kanji_glyph.end())
 			? 0
 			: it->second[static_cast<size_t>(y)];
+		// th01/hardware/grppsafx.cpp's graph_putsa_fx() unconditionally
+		// byte-swaps kanji rows (__rotr__(..., 8)) to undo the raw BIOS INT
+		// 18h AH=14h memory layout (left-8-dots byte first in memory, which
+		// becomes the low byte of a little-endian 16-bit read -- so bit15
+		// isn't the leftmost dot until that swap happens). Our BDF-derived
+		// rows are already MSB-first (bit15 = leftmost dot, see this file's
+		// g_kanji_glyph comment), so pre-swap here to cancel that expected
+		// rotation back out.
+		rows_out[y] = static_cast<uint16_t>((row << 8) | (row >> 8));
 	}
 }
