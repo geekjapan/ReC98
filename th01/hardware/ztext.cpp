@@ -6,6 +6,7 @@
 
 #ifdef REC98_PORT
 #include "port/compat/mbstring_shim.hpp"
+#include "pc98emu/text.hpp"
 #else
 #include <mbctype.h>
 #include <mbstring.h>
@@ -94,6 +95,7 @@ void z_text_setcursor(z_text_cursor_t type)
 	outportb(0x60, ((_BL << 3) + 2));
 }
 
+#ifndef REC98_PORT
 inline uint8_t* tram_jis(uint16_t offset) {
 	return reinterpret_cast<uint8_t *>(MK_FP(SEG_TRAM_JIS, offset));
 }
@@ -101,11 +103,14 @@ inline uint8_t* tram_jis(uint16_t offset) {
 inline tram_atrb2* tram_atrb(uint16_t offset) {
 	return reinterpret_cast<tram_atrb2 *>(MK_FP(SEG_TRAM_ATRB, offset));
 }
+#endif
 
 void z_text_putsa(tram_x_t x, tram_y_t y, int z_atrb, const sshiftjis_t *str)
 {
 	jis_t codepoint;
+#ifndef REC98_PORT
 	int p = (((y * text_width()) + x) * 2);
+#endif
 	tram_atrb2 hw_atrb = 1;
 
 	if(z_atrb & Z_ATRB_BLUE) {
@@ -130,6 +135,47 @@ void z_text_putsa(tram_x_t x, tram_y_t y, int z_atrb, const sshiftjis_t *str)
 		hw_atrb += TX_BLINK;
 	}
 	hw_atrb += (hw_atrb << 8);
+#ifdef REC98_PORT
+	// REC98_PORT: pc98emu/text.hpp's text_atrb_t bits match Z_ATRB's hw_atrb
+	// encoding above bit-for-bit (ATRB_DISP=1, ATRB_BLUE=0x20, ATRB_RED=0x40,
+	// ATRB_GREEN=0x80, ATRB_VLINE=0x10, TX_UNDERLINE/TX_REVERSE/TX_BLINK ==
+	// ATRB_UNDERLINE/ATRB_REVERSE/ATRB_BLINK -- see pc98emu/text.hpp's
+	// text_atrb_t comment), so the low byte of hw_atrb can be passed straight
+	// through to pc98emu_text_put_halfwidth()/put_fullwidth(). No raw
+	// MK_FP(SEG_TRAM_JIS/ATRB, ...) byte pokes here -- see
+	// port/compat/borland.hpp's resolve_far() comment on why that segment
+	// intentionally isn't byte-addressable in this port.
+	const uint8_t port_atrb = static_cast<uint8_t>(hw_atrb);
+	while(str[0]) {
+		if(_ismbblead(str[0])) {
+			codepoint = _mbcjmstojis(
+				(str[0] << 8) + static_cast<uint8_t>(str[1])
+			);
+			str += 2;
+			if(x == (text_width() - 1)) {
+				pc98emu_text_put_halfwidth(x, y, ' ', port_atrb);
+			} else {
+				// Simplification: the original's 0x2921-0x2B7E codepoint
+				// range is a real-hardware quirk that renders a fullwidth
+				// glyph compressed into a single TRAM column (writing only
+				// one cell, not advancing the column cursor by 2) -- an
+				// addressing detail the original decomp itself flags as
+				// unverified ("more research and proof forthcoming", see
+				// th01/hardware/tram_x16.cpp). z_text_putsa() has no
+				// reachable caller in this port's closure, so rather than
+				// guess at unverified hardware behavior, this always takes
+				// the normal 2-column fullwidth path.
+				pc98emu_text_put_fullwidth(x, y, codepoint, port_atrb);
+				x++;
+			}
+		} else {
+			pc98emu_text_put_halfwidth(x, y, *reinterpret_cast<const uint8_t *>(str++), port_atrb);
+		}
+		if(++x >= text_width()) {
+			break;
+		}
+	}
+#else
 	while(str[0]) {
 		if(_ismbblead(str[0])) {
 			codepoint = _mbcjmstojis(
@@ -165,6 +211,7 @@ void z_text_putsa(tram_x_t x, tram_y_t y, int z_atrb, const sshiftjis_t *str)
 			break;
 		}
 	}
+#endif
 }
 
 void z_text_vputsa(

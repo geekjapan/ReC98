@@ -94,19 +94,21 @@ using port::_DH;
 namespace port {
 
 // Resolves a Turbo C++-style far seg:off address to a host pointer into the
-// pc98emu VRAM buffers. Only SEG_PLANE_B/R/G/E (from pc98.h) are currently
-// backed by pc98emu state; SEG_TRAM_JIS/ATRB still assert.
+// pc98emu VRAM buffers. Only SEG_PLANE_B/R/G/E (from pc98.h) are backed by
+// pc98emu state; SEG_TRAM_JIS/ATRB still assert here.
 //
-// pc98emu/text.hpp (T6) now exists, but deliberately does NOT expose a raw
-// byte-addressable TRAM buffer matching real hardware's SEG_TRAM_JIS/ATRB
-// layout: the exact encoding ReC98 pokes into that region for fullwidth
-// glyphs (th01/hardware/tram_x16.cpp's TRAMCursor::putkanji(), via
-// ztext.cpp's inline lead-byte trick) is still flagged upstream as
-// unverified ("more research and proof forthcoming"), and that byte pattern
-// happens to be ambiguous with halfwidth katakana codepoints too. Whoever
-// wires up peekb/pokeb-based TRAM access (T3/T9) should instead translate
-// at this layer into pc98emu_text_put_halfwidth()/put_fullwidth()'s clean,
-// unambiguous (code, atrb, half) cell API.
+// pc98emu/text.hpp (T6) deliberately does NOT expose a raw byte-addressable
+// TRAM buffer matching real hardware's SEG_TRAM_JIS/ATRB layout: the exact
+// encoding ReC98 pokes into that region for fullwidth glyphs is still
+// flagged upstream as unverified ("more research and proof forthcoming"),
+// and that byte pattern happens to be ambiguous with halfwidth katakana
+// codepoints too. So rather than resolve these segments here, T15 rewrote
+// the two reachable raw-TRAM-poke call sites -- th01/hardware/tram_x16.cpp's
+// TRAMCursor::putkanji() and th01/hardware/ztext.cpp's z_text_putsa() -- to
+// call pc98emu_text_put_halfwidth()/put_fullwidth()'s clean, unambiguous
+// (code, atrb, half) cell API directly under their own REC98_PORT branches,
+// instead of going through MK_FP/peekb/pokeb at all. The assert below is a
+// safety net for any future/unported TRAM caller, not an expected path.
 //
 // The segment constants are hardware constants (real PC-98 memory map) and
 // are duplicated here as literals -- rather than referencing pc98.h's
@@ -155,8 +157,8 @@ inline void *resolve_far(uint16_t seg, uint16_t off) {
 	}
 
 	assert(false && "resolve_far(): segment not backed by pc98emu "
-	                "(SEG_TRAM_JIS/ATRB pending the T6 text-font component, "
-	                "or out-of-range plane offset)");
+	                "(SEG_TRAM_JIS/ATRB are intentionally not byte-addressable here -- "
+	                "see this function's header comment -- or out-of-range plane offset)");
 	return nullptr;
 }
 

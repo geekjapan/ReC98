@@ -550,6 +550,14 @@ add_executable(test_blitter_stub tests/blitter_stub_test.cpp)
 target_link_libraries(test_blitter_stub PRIVATE th01main_core compat)
 add_test(NAME blitter_stub COMMAND test_blitter_stub)
 
+# T15: TRAMCursor::putkanji() (tram_x16.cpp) and z_text_putsa() (ztext.cpp)
+# REC98_PORT branches, routed to pc98emu/text.hpp's cell API instead of
+# raw SEG_TRAM_JIS/ATRB MK_FP pokes (see port/compat/borland.hpp's
+# resolve_far() comment).
+add_executable(test_tram_text tests/tram_text_test.cpp)
+target_link_libraries(test_tram_text PRIVATE th01main_core compat pc98emu)
+add_test(NAME tram_text COMMAND test_tram_text)
+
 # ---------------------------------------------------------------------------
 # th01formats tests: synthetic-data encoders (pf_synth.hpp) build minimal
 # .PAR/.GRP/.GRC/.PTN/.BOS/.GRZ samples in memory, write them to temp files,

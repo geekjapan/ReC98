@@ -1,16 +1,27 @@
 #include "libs/master.lib/pc98_gfx.hpp"
 #include "th01/hardware/tram_x16.hpp"
 
+#ifdef REC98_PORT
+#include "pc98emu/text.hpp"
+#endif
+
 void TRAMCursor::putkanji(jis_t jis_kanji, tram_atrb2 atrb)
 {
 	// Yes, this is a correct way of writing any fullwidth character to TRAM.
 	// More research and proof forthcoming...
+#ifdef REC98_PORT
+	const int row = port_cell / pc98emu::TEXT_COLS;
+	const int col = port_cell % pc98emu::TEXT_COLS;
+	pc98emu_text_put_fullwidth(col, row, jis_kanji, static_cast<uint8_t>(atrb));
+	port_cell += 2;
+#else
 	poke(SEG_TRAM_JIS, FP_OFF(&p->left), jis_kanji);
 	poke(SEG_TRAM_JIS, FP_OFF(&p->right), jis_kanji);
 
 	pokeb(SEG_TRAM_ATRB, FP_OFF(&p->left), atrb);
 	pokeb(SEG_TRAM_ATRB, FP_OFF(&p->right), atrb);
 	p++;
+#endif
 }
 
 void TRAMCursor::putkanji_for_5_rows(jis_t jis_kanji, tram_atrb2 atrb)
