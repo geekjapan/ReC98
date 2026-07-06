@@ -76,3 +76,7 @@ add_executable(th01port_compat_test
 )
 target_link_libraries(th01port_compat_test PRIVATE compat)
 add_test(NAME compat_vram_ref COMMAND th01port_compat_test)
+
+add_executable(pc98emu_egc_test tests/egc_test.cpp)
+target_link_libraries(pc98emu_egc_test PRIVATE pc98emu)
+add_test(NAME pc98emu_egc_test COMMAND pc98emu_egc_test)
