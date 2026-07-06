@@ -165,7 +165,23 @@ add_library(masterlib STATIC
 	shim/masterlib/math.cpp
 	shim/masterlib/text.cpp
 )
-target_link_libraries(masterlib PRIVATE compat shim)
+target_link_libraries(masterlib PRIVATE compat shim portsjis)
+
+# ---------------------------------------------------------------------------
+# portsjis: SJIS(cp932) -> UTF-8 filename translation (see
+# compat/sjis_filename.hpp's header comment) -- APFS/host filesystems expect
+# UTF-8 names, but original TH01 code opens files by raw Shift-JIS byte
+# strings (e.g. th01/shiftjis/fns.hpp's ARC_FN). Shared by masterlib's
+# file_* open paths and port/app's assets-directory canary checks.
+# ---------------------------------------------------------------------------
+add_library(portsjis STATIC
+	compat/sjis_filename.cpp
+)
+target_include_directories(portsjis PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
+find_library(ICONV_LIBRARY NAMES iconv libiconv)
+if(ICONV_LIBRARY)
+	target_link_libraries(portsjis PUBLIC ${ICONV_LIBRARY})
+endif()
 
 # ---------------------------------------------------------------------------
 # th01formats: th01/formats/*.cpp (grp/grc/grz/pf/ptn/bos/scoredat -- cfg has
@@ -262,6 +278,7 @@ add_library(appassetsdir STATIC
 	app/assets_dir.cpp
 )
 target_include_directories(appassetsdir PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_link_libraries(appassetsdir PRIVATE portsjis)
 
 add_executable(th01op
 	app/main_op.cpp
@@ -750,3 +767,17 @@ target_link_libraries(test_menu_nav PRIVATE
 )
 add_test(NAME menu_nav COMMAND test_menu_nav)
 set_tests_properties(menu_nav PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)
+
+# M3 (SPEC.md) headless stage-1 gameplay bringup: seeds a fresh resident
+# structure (port/app/reiiden_bootstrap.hpp) and drives the real REIIDEN.EXE
+# closure's main_main() through the stage 1 intro and into live gameplay by
+# injecting synthetic key states, verifying via th01/main/player/player.hpp's
+# player_left that movement input actually takes effect. Skips (doesn't
+# fail) when the real TH01 assets aren't available, same as menu_nav.
+add_executable(test_stage1_bringup tests/stage1_bringup_test.cpp)
+target_compile_definitions(test_stage1_bringup PRIVATE GAME=1)
+target_link_libraries(test_stage1_bringup PRIVATE
+	th01main_core appassetsdir apphost pc98emu shim compat SDL3::SDL3 Threads::Threads
+)
+add_test(NAME stage1_bringup COMMAND test_stage1_bringup)
+set_tests_properties(stage1_bringup PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)

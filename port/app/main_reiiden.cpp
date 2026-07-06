@@ -29,9 +29,14 @@
 // ARC_FN (th01/shiftjis/fns.hpp) is main_main()'s first real data load
 // (arc_load(ARC_FN), right after game_init()/key_start()), so it's used
 // here as the canary file, the same role REIIDEN2.GRP plays for th01op.
+//
+// M3 (SPEC.md): also seeds a fresh resident structure (see
+// port/app/reiiden_bootstrap.hpp's header comment) so main_main() actually
+// starts a new game instead of bailing out with ERROR_RESIDENT_INVALID.
 
 #include "port/app/assets_dir.hpp"
 #include "port/app/host.hpp"
+#include "port/app/reiiden_bootstrap.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -39,7 +44,6 @@
 #include <unistd.h>
 
 #include "th01/pc98/entry.hpp" // main_main()
-#include "th01/shiftjis/fns.hpp" // ARC_FN
 
 namespace {
 
@@ -49,10 +53,11 @@ constexpr const char *DEFAULT_ASSETS_DIR =
 } // namespace
 
 int main(int, char **) {
+	std::string arc_fn_utf8 = port::reiiden_arc_fn_utf8();
 	std::string assets_dir = port::resolve_assets_dir(
-		std::getenv("TH01_ASSETS_DIR"), DEFAULT_ASSETS_DIR, ARC_FN
+		std::getenv("TH01_ASSETS_DIR"), DEFAULT_ASSETS_DIR, arc_fn_utf8
 	);
-	std::string canary_path = assets_dir + "/" + ARC_FN;
+	std::string canary_path = assets_dir + "/" + arc_fn_utf8;
 
 	if(!port::file_exists(canary_path)) {
 		std::fprintf(
@@ -77,6 +82,8 @@ int main(int, char **) {
 	if(!port::host_init("TH01 -- REIIDEN.EXE (gameplay)")) {
 		return 1;
 	}
+
+	port::reiiden_seed_fresh_resident();
 
 	const char *argv0 = "reiiden";
 	int ret = main_main(1, &argv0);

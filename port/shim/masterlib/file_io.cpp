@@ -20,6 +20,8 @@
 
 #include "libs/master.lib/master.hpp"
 
+#include "port/compat/sjis_filename.hpp"
+
 namespace {
 
 FILE *g_current_file = nullptr;
@@ -27,7 +29,7 @@ FILE *g_current_file = nullptr;
 } // namespace
 
 int file_ropen(const char *filename) {
-	g_current_file = std::fopen(filename, "rb");
+	g_current_file = std::fopen(port::sjis_to_utf8(filename).c_str(), "rb");
 	return g_current_file != nullptr;
 }
 
@@ -50,14 +52,15 @@ long file_size(void) {
 }
 
 int file_create(const char *filename) {
-	g_current_file = std::fopen(filename, "wb");
+	g_current_file = std::fopen(port::sjis_to_utf8(filename).c_str(), "wb");
 	return g_current_file != nullptr;
 }
 
 int file_append(const char *filename) {
-	g_current_file = std::fopen(filename, "r+b");
+	std::string path = port::sjis_to_utf8(filename);
+	g_current_file = std::fopen(path.c_str(), "r+b");
 	if(g_current_file == nullptr) {
-		g_current_file = std::fopen(filename, "w+b");
+		g_current_file = std::fopen(path.c_str(), "w+b");
 	}
 	if(g_current_file == nullptr) {
 		return 0;
@@ -89,7 +92,7 @@ void file_close(void) {
 }
 
 int file_exist(const char *filename) {
-	FILE *f = std::fopen(filename, "rb");
+	FILE *f = std::fopen(port::sjis_to_utf8(filename).c_str(), "rb");
 	if(f == nullptr) {
 		return 0;
 	}
@@ -98,7 +101,7 @@ int file_exist(const char *filename) {
 }
 
 int file_delete(const char *filename) {
-	return std::remove(filename) == 0;
+	return std::remove(port::sjis_to_utf8(filename).c_str()) == 0;
 }
 
 void dos_puts2(const char *string) {
