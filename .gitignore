@@ -9,3 +9,6 @@ tup-generate.vardict
 # Converted sprites
 *.[ac]sp
 *.[AC]SP
+
+# SDL port build dir
+port/build/
