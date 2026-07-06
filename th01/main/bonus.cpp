@@ -1,4 +1,10 @@
+#ifndef REC98_PORT
+// REC98_PORT: delay() gets a host no-op stub in compat/borland.hpp; nothing
+// else in this file needs a Turbo C++ <dos.h> declaration.
 #include <dos.h>
+#else
+#include <cstring>
+#endif
 #include "libs/master.lib/pc98_gfx.hpp"
 #include "th01/resident.hpp"
 #include "th01/v_colors.hpp"
@@ -178,6 +184,20 @@ void near egc_pagetrans_rowshift_alternating(
 	page_access(0);	egc_chunk(vo_p0 + CHUNK_OFFSET_RIGHT) = dots;
 }
 
+#ifdef REC98_PORT
+// REC98_PORT: totle_pagetrans_animate() below calls
+// egc_pagetrans_rowshift_alternating_32(), a name that doesn't exist
+// anywhere in this codebase -- looks like a pre-existing naming mismatch
+// against egc_pagetrans_rowshift_alternating() above, unrelated to
+// porting. Left as-is outside REC98_PORT (ground truth); aliased here so
+// the port build links.
+static inline void egc_pagetrans_rowshift_alternating_32(
+	vram_y_t y, vram_byte_amount_t transferred_offset
+) {
+	egc_pagetrans_rowshift_alternating(y, transferred_offset);
+}
+#endif
+
 void near totle_pagetrans_animate(int)
 {
 	upixel_t y;
@@ -341,12 +361,36 @@ void stagebonus_animate(int stage_num)
 		stagebonus_str_put(METRIC_LEFT, row, V_WHITE, digit_buf->byte); \
 	}
 
+#ifdef REC98_PORT
+	// REC98_PORT: stagebonus_title/stagebonus_digit_buf (th01/shiftjis/
+	// bonus.hpp) are #define'd string literals that this function
+	// intentionally writes through below (fullwidth_numeral() etc.) --
+	// Borland string literals were plain mutable `char*` by default, but
+	// ISO C++ literals are `const char[]`, read-only, and possibly merged
+	// with identical literals elsewhere, so reinterpret_cast can no longer
+	// (and shouldn't) cast away that const. Use local mutable copies
+	// instead of reinterpreting the literals' storage in place.
+	static char stagebonus_title_buf[sizeof(stagebonus_title)];
+	static char stagebonus_digit_buf_mut[sizeof(stagebonus_digit_buf)];
+	std::memcpy(stagebonus_title_buf, stagebonus_title, sizeof(stagebonus_title_buf));
+	std::memcpy(
+		stagebonus_digit_buf_mut, stagebonus_digit_buf,
+		sizeof(stagebonus_digit_buf_mut)
+	);
+	stagebonus_title_t* title = reinterpret_cast<stagebonus_title_t *>(
+		stagebonus_title_buf
+	);
+	ShiftJISKanji* digit_buf = reinterpret_cast<ShiftJISKanji *>(
+		stagebonus_digit_buf_mut
+	);
+#else
 	stagebonus_title_t* title = reinterpret_cast<stagebonus_title_t *>(
 		&stagebonus_title
 	);
 	ShiftJISKanji* digit_buf = reinterpret_cast<ShiftJISKanji *>(
 		stagebonus_digit_buf
 	);
+#endif
 	int val = 0;
 	unsigned int i;
 

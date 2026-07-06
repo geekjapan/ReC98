@@ -234,7 +234,18 @@ void regist_put_initial(
 			table_name_left(0),
 			top,
 			col_and_fx_text,
+#ifdef REC98_PORT
+			// REC98_PORT: name_blank (const unsigned char*) and
+			// names_z[i].byte (const int8_t*) are genuinely incompatible
+			// pointer types for `?:` under ISO C++ (no implicit common
+			// type between unsigned char* and signed char*) -- Borland's
+			// "a byte is a byte" leniency again. Unify via reinterpret_cast.
+			(i == entered_place)
+				? reinterpret_cast<const int8_t *>(name_blank)
+				: names_z[i].byte
+#else
 			(i == entered_place) ? name_blank : names_z[i].byte
+#endif
 		);
 		graph_putfwnum_fx(
 			table_score_left(0),
@@ -617,7 +628,18 @@ void regist_menu(
 
 	if(place < SCOREDAT_PLACES) {
 		for(long shift = (SCOREDAT_PLACES - 1); shift > place; shift--) {
+#ifdef REC98_PORT
+			// REC98_PORT: strcpy() expects `char*`; names[].byte is
+			// `int8_t*` (signed char*) -- a distinct type from plain
+			// `char` in ISO C++, unlike Borland's "a byte is a byte"
+			// treatment of the two.
+			strcpy(
+				reinterpret_cast<char *>(names[shift].byte),
+				reinterpret_cast<const char *>(names[shift - 1].byte)
+			);
+#else
 			strcpy(names[shift].byte, names[shift - 1].byte);
+#endif
 			scoredat_score[shift] = scoredat_score[shift - 1];
 			scoredat_stages[shift] = scoredat_stages[shift - 1];
 			scoredat_routes[shift] = scoredat_routes[shift - 1];

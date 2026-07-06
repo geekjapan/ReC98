@@ -71,6 +71,13 @@ enum player_48x32_cel_t {
 /// Types
 /// -----
 
+#ifdef REC98_PORT
+// REC98_PORT: this enum tag collides with the POSIX `mode_t` typedef
+// (<sys/types.h>, visible transitively on this host); it's otherwise just a
+// namespace for the M_* constants below (the actual state variable further
+// down is a plain int8_t), so only the tag needs to change.
+#define mode_t th01_player_mode_t
+#endif
 enum mode_t {
 	// Standing still or dashing left or right. Can switch into M_SHOOT
 	// or M_SWING_OR_SLIDE.
@@ -89,6 +96,9 @@ enum mode_t {
 	M_SPECIAL_SECOND = 4,
 	M_SPECIAL_THIRD = 5,
 };
+#ifdef REC98_PORT
+#undef mode_t
+#endif
 
 enum submode_direction_t {
 	SD_STATIONARY = INPUT_NONE,
@@ -335,6 +345,17 @@ inline void special_start_shot(
 }
 /// ----------------
 
+#ifdef REC98_PORT
+// REC98_PORT: see player_unput_update_render()'s prev_cel_48x48/prev_left
+// macros below for what this is for -- has to live at file scope since
+// C++ doesn't allow template declarations inside a function body.
+template <class T> struct CastLvalueProxy {
+	int &prev;
+	operator T() const { return static_cast<T>(prev); }
+	CastLvalueProxy &operator=(T v) { prev = static_cast<int>(v); return *this; }
+};
+#endif
+
 void player_unput_update_render(bool16 do_not_reset_player_state)
 {
 	enum bomb_flag_t {
@@ -378,9 +399,20 @@ void player_unput_update_render(bool16 do_not_reset_player_state)
 	int special_frames;
 
 	// YOU'VE ALREADY GOT A VARIABLE FOR THIS
+	#ifdef REC98_PORT
+	// REC98_PORT: prev_cel_48x48/prev_left reuse a single `int prev` local
+	// as two differently-typed views via a cast-as-lvalue trick (assigning
+	// through a cast) -- a Borland/C-style-cast leniency that ISO C++
+	// doesn't extend to static_cast. CastLvalueProxy (file scope, above)
+	// gives the same read/write-through-a-different-typed-view behavior
+	// with ordinary conversion + assignment operators instead.
+	#define prev_cel_48x48	CastLvalueProxy<player_48x48_cel_t>{prev}
+	#define prev_left     	CastLvalueProxy<screen_x_t>{prev}
+	#else
 	#define prev_cel_48x48	static_cast<player_48x48_cel_t>(prev)
 
 	#define prev_left     	static_cast<screen_x_t>(prev)
+	#endif
 
 	if(do_not_reset_player_state == false) {
 		dash_cycle.v = 0;

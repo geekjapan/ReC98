@@ -4,7 +4,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 	set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type" FORCE)
 endif()
 
-project(th01port CXX)
+project(th01port CXX C)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -46,6 +46,13 @@ target_link_libraries(th01port_demo PRIVATE pc98emu SDL3::SDL3)
 # path.
 # ---------------------------------------------------------------------------
 add_library(compat INTERFACE)
+# compat/host_headers/: stand-ins for a couple of Turbo C++ standard headers
+# (currently just <malloc.h>) that have a direct <stdlib.h>/etc. equivalent
+# on a normal host but no file of that name at all outside DOS/Windows.
+# BEFORE + listed first so these shadow the (nonexistent) system ones.
+target_include_directories(compat BEFORE INTERFACE
+	${CMAKE_CURRENT_SOURCE_DIR}/compat/host_headers
+)
 target_include_directories(compat INTERFACE
 	${CMAKE_CURRENT_SOURCE_DIR}
 	${CMAKE_CURRENT_SOURCE_DIR}/..
@@ -154,6 +161,8 @@ add_library(masterlib STATIC
 	shim/masterlib/keyboard.cpp
 	shim/masterlib/random.cpp
 	shim/masterlib/gfx.cpp
+	shim/masterlib/math.cpp
+	shim/masterlib/text.cpp
 )
 target_link_libraries(masterlib PRIVATE compat shim)
 
@@ -259,6 +268,176 @@ add_executable(th01op
 target_link_libraries(th01op PRIVATE th01op_core appassetsdir apphost compat)
 
 # ---------------------------------------------------------------------------
+# bmp2arr_host: a *native host* build of Pipeline/bmp2arr[l].c, the same
+# BMP-to-planar-array converter Tupfile.lua's BMP()/Sprites() helpers run
+# under DOS to turn th01/sprites/*.bmp into the sSPARK/sPELLET/etc. C++
+# arrays th01/main/**'s gameplay code links against. The tool's source is
+# already host-portable (falls back to <stdint.h> when neither
+# REC98_PROJECT nor a DOS/Windows compiler is defined) except for two
+# headers no macOS/Linux libc ships: <malloc.h> (superseded by <stdlib.h>)
+# and <endian.h> (no macOS equivalent) -- tools/bmp2arr_hostshim/ provides
+# both, ahead of the real system include path, so the upstream .c files run
+# completely unmodified. This regenerates real, correct sprite data (not
+# placeholder zeros) without needing a DOS toolchain or Tup.
+# ---------------------------------------------------------------------------
+add_executable(bmp2arr_host
+	${CMAKE_CURRENT_SOURCE_DIR}/../Pipeline/bmp2arr.c
+	${CMAKE_CURRENT_SOURCE_DIR}/../Pipeline/bmp2arrl.c
+)
+target_include_directories(bmp2arr_host BEFORE PRIVATE
+	${CMAKE_CURRENT_SOURCE_DIR}/tools/bmp2arr_hostshim
+)
+target_include_directories(bmp2arr_host PRIVATE
+	${CMAKE_CURRENT_SOURCE_DIR}/../Pipeline
+)
+
+# ---------------------------------------------------------------------------
+# th01_sprite_gen: sSPARK/sLEAF_LEFT/sLEAF_RIGHT/sINTERLEAVE_MASKS/
+# sSHOOTOUT_LASER/sPELLET/sPELLET_CLOUD/sPILLAR/sSHAPE8X8/sSTAGEBONUS_BOX --
+# every sprite array th01/main/**'s REIIDEN.EXE gameplay closure needs,
+# generated at build time from th01/sprites/*.bmp by bmp2arr_host, exactly
+# matching Tupfile.lua's Sprites() call (same -sym/-sw/-sh/-pshf arguments,
+# see that table around line 380).
+#
+# Unlike the font asset or a normal generated TU, these aren't linked in:
+# every consumer (th01/main/bullet/pellet_c.cpp, .../boss/b20m.cpp, etc.)
+# does `#include "th01/sprites/<name>.csp"` directly inline, exactly like
+# Tup's BMP() rule writes its .csp output right next to the source .bmp/.hpp
+# (`bmp[1]:gsub("%..+$", ".csp")`) for the including TU to pick up. So
+# bmp2arr_host's outputs go into a generated include root that mirrors that
+# same "th01/sprites/" relative layout, prepended to th01main_core's include
+# path -- no separate compiled object, no risk of the inline-included arrays
+# colliding with a second, separately-linked definition.
+# ---------------------------------------------------------------------------
+set(TH01SPRITES_GEN_ROOT ${CMAKE_CURRENT_BINARY_DIR}/generated/th01_sprites_inc)
+set(TH01SPRITES_GEN_DIR ${TH01SPRITES_GEN_ROOT}/th01/sprites)
+file(MAKE_DIRECTORY ${TH01SPRITES_GEN_DIR})
+
+function(th01_sprite_csp OUT_VAR BMP_RELPATH SYM W H)
+	get_filename_component(bmp_base ${BMP_RELPATH} NAME_WE)
+	set(bmp_abspath ${CMAKE_CURRENT_SOURCE_DIR}/../${BMP_RELPATH})
+	set(out_csp ${TH01SPRITES_GEN_DIR}/${bmp_base}.csp)
+	add_custom_command(
+		OUTPUT ${out_csp}
+		COMMAND bmp2arr_host -q -i ${bmp_abspath} -o ${out_csp}
+			-sym ${SYM} -of cpp -sw ${W} -sh ${H} ${ARGN}
+		DEPENDS bmp2arr_host ${bmp_abspath}
+		COMMENT "bmp2arr: ${BMP_RELPATH} -> ${SYM}"
+		VERBATIM
+	)
+	set(${OUT_VAR} ${out_csp} PARENT_SCOPE)
+endfunction()
+
+th01_sprite_csp(SPR_LEAF_S    th01/sprites/leaf_s.bmp    sSPARK             8  8)
+th01_sprite_csp(SPR_LEAF_L    th01/sprites/leaf_l.bmp    sLEAF_LEFT         8  8)
+th01_sprite_csp(SPR_LEAF_R    th01/sprites/leaf_r.bmp    sLEAF_RIGHT        8  8)
+th01_sprite_csp(SPR_ILEAVE_M  th01/sprites/ileave_m.bmp  sINTERLEAVE_MASKS  8  8)
+th01_sprite_csp(SPR_LASER_S   th01/sprites/laser_s.bmp   sSHOOTOUT_LASER    16 8)
+th01_sprite_csp(SPR_PELLET    th01/sprites/pellet.bmp    sPELLET            8  8 -pshf inner)
+th01_sprite_csp(SPR_PELLET_C  th01/sprites/pellet_c.bmp  sPELLET_CLOUD      16 16)
+th01_sprite_csp(SPR_PILLAR    th01/sprites/pillar.bmp    sPILLAR            32 8)
+th01_sprite_csp(SPR_SHAPE8X8  th01/sprites/shape8x8.bmp  sSHAPE8X8          8  8)
+th01_sprite_csp(SPR_BONUSBOX  th01/sprites/bonusbox.bmp  sSTAGEBONUS_BOX    8  4)
+
+add_custom_target(th01_sprite_gen DEPENDS
+	${SPR_LEAF_S} ${SPR_LEAF_L} ${SPR_LEAF_R} ${SPR_ILEAVE_M} ${SPR_LASER_S}
+	${SPR_PELLET} ${SPR_PELLET_C} ${SPR_PILLAR} ${SPR_SHAPE8X8} ${SPR_BONUSBOX}
+)
+
+# ---------------------------------------------------------------------------
+# th01main_core: TH01 REIIDEN.EXE's (stages/player/bullets/bosses) dependency
+# closure -- th01/main_01.cpp (main_main()) plus every main_NN.cpp segment
+# stub and the handful of un-numbered root th01/*.cpp stubs that pull in
+# th01/main/**/*.cpp, plus its own copies of the shared hardware TUs
+# (see th01op_core above for why each binary compiles its own copies rather
+# than sharing one lib -- OP.EXE and REIIDEN.EXE are separate binaries on
+# real hardware too).
+# ---------------------------------------------------------------------------
+add_library(th01main_core STATIC
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/main_01.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/main_09.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/main_14.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/main_15.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/main_17.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/main_18.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/main_20.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/main_21.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/main_23.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/main_24.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/main_25.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/main_26.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/player.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/stages.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/main_28.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/main_29.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/main_30.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/main_31.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/main_32.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/particle.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/main_33.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/main_34.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/main_35.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/main_36.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/main_37.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/main_38.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/bullet_l.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/grpinv32.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/scrollup.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/pgtrans.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/grph1to0.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/core/initexit.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/core/resident.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/hardware/graph.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/hardware/grppsafx.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/hardware/grp_text.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/hardware/egc.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/hardware/frmdelay.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/hardware/vsync.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/hardware/ztext.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/hardware/input.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/hardware/tram_x16.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/hardware/grp2xscs.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../th01/hiscore/regist.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../platform/x86real/pc98/font.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../platform/x86real/pc98/grcg.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../platform/x86real/pc98/grp_clip.cpp
+	shim/main_globals.cpp
+	shim/blitter_stub.cpp
+	shim/egc_copy_shim.cpp
+	compat/x86real_shim.cpp
+)
+target_compile_definitions(th01main_core PRIVATE GAME=1)
+target_include_directories(th01main_core BEFORE PRIVATE ${TH01SPRITES_GEN_ROOT})
+add_dependencies(th01main_core th01_sprite_gen)
+target_compile_options(th01main_core PRIVATE
+	-Wno-register
+	-funsigned-char
+	# Decompiled data tables (e.g. th01/main/stage/stageobj.cpp's raw
+	# "glitch stage" memory dump) are plain `int8_t foo[] = { 184, ... }`
+	# braced initializers with values >127 -- fine as a truncating bit
+	# pattern under Borland, an ISO C++ list-initialization narrowing error
+	# here. The values are intentional (byte-for-byte memory dumps), so
+	# silence rather than rewrite them.
+	-Wno-c++11-narrowing
+	-include ${CMAKE_CURRENT_SOURCE_DIR}/compat/borland.hpp
+)
+target_link_libraries(th01main_core PRIVATE
+	compat masterlib th01formats sndstub apphost
+)
+
+# ---------------------------------------------------------------------------
+# th01main: the REIIDEN.EXE port executable. port/app/main_reiiden.cpp
+# resolves an assets directory, fails with a clear message if TH01's data
+# files aren't there (see that file's header comment), then calls
+# th01/main_01.cpp's main_main() directly.
+# ---------------------------------------------------------------------------
+add_executable(th01main
+	app/main_reiiden.cpp
+)
+target_compile_definitions(th01main PRIVATE GAME=1)
+target_link_libraries(th01main PRIVATE th01main_core appassetsdir apphost compat)
+
+# ---------------------------------------------------------------------------
 # Tests: ppm golden-test helper + ctest unit/golden tests. No GitHub Actions
 # dependency -- port/ci.sh drives configure+build+ctest as the local merge
 # gate (see WORKFLOW.md).
@@ -347,6 +526,29 @@ add_test(NAME masterlib_gfx COMMAND test_masterlib_gfx)
 add_executable(test_masterlib_keyboard tests/masterlib_keyboard_test.cpp)
 target_link_libraries(test_masterlib_keyboard PRIVATE masterlib shim compat)
 add_test(NAME masterlib_keyboard COMMAND test_masterlib_keyboard)
+
+# ---------------------------------------------------------------------------
+# th01main (T11a REIIDEN.EXE bring-up) tests: the new shims this component
+# adds -- master.lib's SinTable8/CosTable8/iatan2/isqrt/ihypot and raw TRAM
+# text_clear()/text_fillca() (unreached by the OP.EXE closure), EGCCopy
+# forwarding to pc98emu's already-tested EGC engine, and the deliberately-
+# stubbed blitter (see shim/blitter_stub.cpp's header comment).
+# ---------------------------------------------------------------------------
+add_executable(test_masterlib_math tests/masterlib_math_test.cpp)
+target_link_libraries(test_masterlib_math PRIVATE masterlib compat)
+add_test(NAME masterlib_math COMMAND test_masterlib_math)
+
+add_executable(test_masterlib_text tests/masterlib_text_test.cpp)
+target_link_libraries(test_masterlib_text PRIVATE masterlib compat)
+add_test(NAME masterlib_text COMMAND test_masterlib_text)
+
+add_executable(test_main_egc_copy_shim tests/main_egc_copy_shim_test.cpp)
+target_link_libraries(test_main_egc_copy_shim PRIVATE th01main_core compat pc98emu)
+add_test(NAME main_egc_copy_shim COMMAND test_main_egc_copy_shim)
+
+add_executable(test_blitter_stub tests/blitter_stub_test.cpp)
+target_link_libraries(test_blitter_stub PRIVATE th01main_core compat)
+add_test(NAME blitter_stub COMMAND test_blitter_stub)
 
 # ---------------------------------------------------------------------------
 # th01formats tests: synthetic-data encoders (pf_synth.hpp) build minimal

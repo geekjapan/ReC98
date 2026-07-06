@@ -1,6 +1,9 @@
 #pragma option -zCGRAPH_EX_TEXT
 
+#ifndef REC98_PORT
+// REC98_PORT: nothing in this file actually uses a <dos.h> declaration.
 #include <dos.h>
+#endif
 #include "platform/x86real/pc98/page.hpp"
 #include "th01/sprites/ileave_m.hpp"
 #include "th01/hardware/palette.h"

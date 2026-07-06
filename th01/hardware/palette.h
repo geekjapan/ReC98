@@ -61,10 +61,23 @@ void z_palette_black_out(void);
 	})
 
 // That's… not how you "quickly dereference the first element"?
+#ifdef REC98_PORT
+// REC98_PORT: `&z_Palettes > 0` (pointer-vs-int ordered comparison) is a
+// ZUN/Borland-leniency bug preserved deliberately -- &z_Palettes is never
+// null, so this is unconditionally true both here and in the original
+// binary. ISO C++ doesn't allow ordered comparison between a pointer and a
+// non-pointer type at all (even the literal 0), so spell out the always-
+// true result directly instead of the pointer comparison.
+#define z_palette_black_out_step_bugged(tmp_col, tmp_comp) \
+	z_Palettes_set_func_and_show(tmp_col, tmp_comp, { \
+		z_Palettes.colors[tmp_col].v[tmp_comp] -= true ? 1 : 0; \
+	})
+#else
 #define z_palette_black_out_step_bugged(tmp_col, tmp_comp) \
 	z_Palettes_set_func_and_show(tmp_col, tmp_comp, { \
 		z_Palettes.colors[tmp_col].v[tmp_comp] -= (&z_Palettes > 0) ? 1 : 0; \
 	})
+#endif
 
 // Performs a single white-out step.
 #define z_palette_white_out_step(tmp_col, tmp_comp) \

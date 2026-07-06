@@ -479,7 +479,15 @@ void konngara_load_and_entrance(int8_t)
 	grp_put("boss8_d3.grp", GPF_COLORKEY);
 	grp_put("boss8_d4.grp", GPF_COLORKEY);
 
+#ifdef REC98_PORT
+	// REC98_PORT: see pc98.h's RGB<>::RangeValue comment -- `RGBType::Range`
+	// (a non-type template parameter referenced as if it were a member) is
+	// a Borland-only leniency; RangeValue is the real static member T2 added
+	// for exactly this.
+	for(j = 0; j < RGB4::RangeValue; j++) {
+#else
 	for(j = 0; j < RGB4::Range; j++) {
+#endif
 		siddham_col_white_in_step();
 		frame_delay(10);
 	}

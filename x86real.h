@@ -111,9 +111,21 @@ int __cdecl int86(int __intno, union REGS *__inregs, union REGS *__outregs);
 // `(void *)+(void *)` isn't valid pointer arithmetic).
 #ifndef REC98_PORT
 #define MK_FP(seg,off) ((void __seg *)(seg) + (void __near *)(off))
-#endif
 #define FP_SEG(fp)     ((uint16_t)(void __seg *)(void __far *)(fp))
 #define FP_OFF(fp)     ((uint16_t)(fp))
+#else
+// REC98_PORT: FP_SEG()/FP_OFF() split a real 16-bit segment:offset far
+// pointer -- meaningless with __seg/__far emptied out and a real (64-bit)
+// host pointer underneath, which a direct `(uint16_t)(fp)` cast can't even
+// express (clang errors: "cast from pointer to smaller type loses
+// information"). The one call site reached by any component ported so far
+// (th01/hardware/tram_x16.cpp's poke(SEG_TRAM_JIS, FP_OFF(&cell), ...))
+// writes to a TRAM segment resolve_far() doesn't back yet anyway (asserts
+// at runtime, see compat/borland.hpp) -- so this just needs to compile, not
+// produce a meaningful offset. Truncate through uintptr_t instead.
+#define FP_SEG(fp)     ((uint16_t)(reinterpret_cast<uintptr_t>(fp) >> 16))
+#define FP_OFF(fp)     ((uint16_t)(reinterpret_cast<uintptr_t>(fp)))
+#endif
 
 #if defined(__cplusplus) && !defined(REC98_PORT)
 int16_t inline peek(uint16_t __segment, uint16_t __offset) {

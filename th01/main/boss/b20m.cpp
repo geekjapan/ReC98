@@ -2,7 +2,10 @@
 /// ----------------------------
 
 #include <stdlib.h>
+#ifndef REC98_PORT
+// REC98_PORT: see th01/main/bonus.cpp's identical delay()-only note.
 #include <dos.h>
+#endif
 #include "libs/master.lib/pc98_gfx.hpp"
 #include "th01/rank.h"
 #include "th01/resident.hpp"
@@ -865,7 +868,15 @@ void near pattern_vortices(void)
 		}
 	} else if(boss_phase_frame < 240) {
 		if(boss_phase_frame == 200) {
+#ifdef REC98_PORT
+			// REC98_PORT: assignment through a cast is a Borland/
+			// C-style-cast lvalue leniency ISO C++ doesn't allow (and
+			// would reinterpret the wrong byte width here anyway: bool16
+			// is 16-bit, but a host `int` is 32-bit). Assign directly.
+			dir_first = (irand() % 2);
+#else
 			static_cast<int>(dir_first) = (irand() % 2);
+#endif
 			if(dir_first == X_LEFT) {
 				wand_lower_both();
 			}
@@ -877,7 +888,12 @@ void near pattern_vortices(void)
 		}
 	} else if(boss_phase_frame < 320) {
 		if(boss_phase_frame == 240) {
+#ifdef REC98_PORT
+			// REC98_PORT: see the dir_first assignment above for why.
+			dir_second = (irand() % 2);
+#else
 			static_cast<int>(dir_second) = (irand() % 2);
+#endif
 			if((dir_second == X_RIGHT) && (dir_second == dir_first)) {
 				wand_lower_both();
 			} else if((dir_second == X_LEFT) && (dir_second == dir_first)) {
@@ -2422,7 +2438,16 @@ void near pattern_swaying_leaves(int &frame, int spawn_interval_or_reset)
 				);
 			}
 			if((frame % 4) == 0) {
+#ifdef REC98_PORT
+				// REC98_PORT: incrementing through a cast is a Borland/
+				// C-style-cast lvalue leniency ISO C++'s static_cast
+				// doesn't allow; reassign instead.
+				flag[i] = static_cast<leaf_flag_t>(
+					static_cast<int>(flag[i]) + 1
+				);
+#else
 				static_cast<int>(flag[i])++;
+#endif
 			}
 		} else if(flag[i] == LF_LEAF) {
 			leaf_put(vo, first_bit, i, ((velocity_x[i].v < to_dsp(0.0f))

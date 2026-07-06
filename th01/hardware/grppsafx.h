@@ -45,6 +45,34 @@ int pascal text_extent(const shiftjis_t *str);
 void pascal graph_putsa_fx(
 	screen_x_t left, vram_y_t top, int16_t col_and_fx, const shiftjis_t *str
 );
+
+#ifdef REC98_PORT
+// REC98_PORT: gameplay code frequently builds these strings in a
+// StupidBytewiseWrapperAround<>'s `.byte` (int8_t[]) or `.ubyte` (uint8_t[])
+// view (decomp.hpp) rather than its `.t` (shiftjis_kanji_t) view, then
+// passes that straight to text_extent()/graph_putsa_fx(). Under Borland,
+// shiftjis_t/int8_t/uint8_t/char were all freely interchangeable
+// "a byte is a byte" pointer types; ISO C++ treats char/signed char/
+// unsigned char as three distinct types, so `.byte`/`.ubyte` no longer
+// implicitly convert to `const shiftjis_t*`. These overloads restore that
+// convenience without touching every call site individually.
+inline int pascal text_extent(const int8_t *str) {
+	return text_extent(reinterpret_cast<const shiftjis_t *>(str));
+}
+inline int pascal text_extent(const uint8_t *str) {
+	return text_extent(reinterpret_cast<const shiftjis_t *>(str));
+}
+inline void pascal graph_putsa_fx(
+	screen_x_t left, vram_y_t top, int16_t col_and_fx, const int8_t *str
+) {
+	graph_putsa_fx(left, top, col_and_fx, reinterpret_cast<const shiftjis_t *>(str));
+}
+inline void pascal graph_putsa_fx(
+	screen_x_t left, vram_y_t top, int16_t col_and_fx, const uint8_t *str
+) {
+	graph_putsa_fx(left, top, col_and_fx, reinterpret_cast<const shiftjis_t *>(str));
+}
+#endif
 #endif
 
 #endif /* TH01_HARDWARE_GRPPSAFX_H */
