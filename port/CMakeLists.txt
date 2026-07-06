@@ -30,3 +30,12 @@ add_executable(th01port_demo
 	demo/main.cpp
 )
 target_link_libraries(th01port_demo PRIVATE pc98emu SDL3::SDL3)
+
+# ---------------------------------------------------------------------------
+# Unit tests (ctest).
+# ---------------------------------------------------------------------------
+enable_testing()
+
+add_executable(pc98emu_egc_test tests/egc_test.cpp)
+target_link_libraries(pc98emu_egc_test PRIVATE pc98emu)
+add_test(NAME pc98emu_egc_test COMMAND pc98emu_egc_test)
