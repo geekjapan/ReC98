@@ -30,3 +30,26 @@ add_executable(th01port_demo
 	demo/main.cpp
 )
 target_link_libraries(th01port_demo PRIVATE pc98emu SDL3::SDL3)
+
+# ---------------------------------------------------------------------------
+# Tests: ppm golden-test helper + ctest unit/golden tests. No GitHub Actions
+# dependency -- port/ci.sh drives configure+build+ctest as the local merge
+# gate (see WORKFLOW.md).
+# ---------------------------------------------------------------------------
+enable_testing()
+
+add_library(porttestutil STATIC
+	tests/ppm.cpp
+)
+target_include_directories(porttestutil PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_executable(test_ppm tests/test_ppm.cpp)
+target_link_libraries(test_ppm PRIVATE porttestutil)
+add_test(NAME ppm_helper COMMAND test_ppm)
+
+add_executable(test_render_golden tests/test_render_golden.cpp)
+target_link_libraries(test_render_golden PRIVATE pc98emu porttestutil)
+target_compile_definitions(test_render_golden PRIVATE
+	PORT_TESTS_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/golden"
+)
+add_test(NAME render_golden COMMAND test_render_golden)
