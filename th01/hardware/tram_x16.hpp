@@ -5,6 +5,19 @@ class TRAMCursor {
 		jis_t left;
 		jis_t right;
 	} near* p;
+#ifdef REC98_PORT
+	// port/compat/borland.hpp's resolve_far() deliberately doesn't expose a
+	// raw byte-addressable SEG_TRAM_JIS/ATRB buffer (the exact hardware byte
+	// encoding is unverified upstream -- see putkanji()'s comment); instead
+	// putkanji() tracks a linear cell index here and calls
+	// pc98emu_text_put_fullwidth() directly. rewind_to_topleft() resets this
+	// to cell 0, and each putkanji() call advances it by 2 cells (matching
+	// `p`'s `struct { left, right }` pair stride) -- including past the last
+	// visible row into the "second TRAM page" putkanji_until_end() relies on
+	// being unused (pc98emu_text_put_fullwidth() no-ops out-of-bounds rows,
+	// same as that page being unread by any real renderer).
+	int port_cell = 0;
+#endif
 
 public:
 	// Writes the given fullwidth JIS code point with the given attribute to
@@ -24,6 +37,9 @@ public:
 
 	void rewind_to_topleft() {
 		p = 0;
+#ifdef REC98_PORT
+		port_cell = 0;
+#endif
 	}
 };
 
