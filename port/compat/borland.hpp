@@ -29,6 +29,23 @@
 #define pascal
 #define __fastcall
 
+// x86real.h's non-Turbo-C fallback branch (taken under REC98_PORT, since
+// none of __TURBOC__/__MSDOS__/__DOS_H are defined) spells the same
+// distance/calling-convention keywords with a leading double underscore,
+// plus Turbo C++'s `interrupt` ISR-linkage keyword for its getvect()/
+// setvect() declarations. Same treatment: empty, meaningless in a flat
+// address space with one calling convention.
+#define __far
+#define __near
+#define __cdecl
+#define interrupt
+
+// Turbo C++'s segment-qualified pointer keyword (`void __seg *`, used by
+// master.lib's hmem_/resdata_/dos_free() family for DOS segment handles).
+// Not a real clang keyword; meaningless in a flat address space, same as
+// far/near above.
+#define __seg
+
 // Pseudo registers
 // ----------------
 // Turbo C++ exposes the real CPU registers as global lvalues for inline-asm

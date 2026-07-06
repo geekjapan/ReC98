@@ -101,11 +101,21 @@ int __cdecl int86(int __intno, union REGS *__inregs, union REGS *__outregs);
 /// Segmented memory
 /// ----------------
 
+// REC98_PORT: MK_FP/peek/peekb/poke/pokeb are already provided by
+// compat/borland.hpp (backed by pc98emu's VRAM buffers), included before
+// any ReC98 header reaches this file. Both definitions rely on
+// Borland-specific "segment + near-offset pointer arithmetic" that doesn't
+// mean anything once __seg/__far/__near are emptied out for a flat address
+// space, so this file's own versions would either conflict (peek/peekb/
+// poke/pokeb: same name, different body) or fail to compile (MK_FP:
+// `(void *)+(void *)` isn't valid pointer arithmetic).
+#ifndef REC98_PORT
 #define MK_FP(seg,off) ((void __seg *)(seg) + (void __near *)(off))
+#endif
 #define FP_SEG(fp)     ((uint16_t)(void __seg *)(void __far *)(fp))
 #define FP_OFF(fp)     ((uint16_t)(fp))
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(REC98_PORT)
 int16_t inline peek(uint16_t __segment, uint16_t __offset) {
 	return (*((int16_t __far *)MK_FP(__segment, __offset)));
 }
