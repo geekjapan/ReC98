@@ -199,3 +199,20 @@ void pc98emu_text_composite(uint32_t *out_rgba) {
 		}
 	}
 }
+
+void pc98emu_font_ank_rows(uint8_t ank_code, uint8_t rows_out[pc98emu::CELL_H]) {
+	load_fonts();
+	for(int y = 0; y < pc98emu::CELL_H; y++) {
+		rows_out[y] = g_ank_glyph[ank_code][static_cast<size_t>(y)];
+	}
+}
+
+void pc98emu_font_kanji_rows(uint16_t jis_code, uint16_t rows_out[pc98emu::CELL_H]) {
+	load_fonts();
+	auto it = g_kanji_glyph.find(jis_code);
+	for(int y = 0; y < pc98emu::CELL_H; y++) {
+		rows_out[y] = (it == g_kanji_glyph.end())
+			? 0
+			: it->second[static_cast<size_t>(y)];
+	}
+}

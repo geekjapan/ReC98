@@ -91,4 +91,18 @@ void pc98emu_text_set_blink_visible(bool visible);
 // pc98emu_render()'s output.
 void pc98emu_text_composite(uint32_t *out_rgba);
 
+// Raw glyph rows for direct-to-VRAM blitting callers that bypass the TRAM
+// compositor entirely (platform/x86real/pc98/font.cpp's REC98_PORT
+// font_read(), used by th01/hardware/grppsafx.cpp's graph_putsa_fx()). Row 0
+// is the topmost of the glyph's CELL_H (16) rows; bits are MSB-first (bit
+// 7/15 = leftmost dot) -- the same layout pc98emu_text_composite()'s
+// internal glyph_row() reads. `ank_code` is a raw halfwidth JIS X0201 byte
+// (0-255, same space as pc98emu_text_put_halfwidth()'s ank_code); `jis_code`
+// is a fullwidth JIS X0208 codepoint packed the same way as
+// pc98emu_text_put_fullwidth()'s jis_code. An unmapped jis_code yields all
+// zero rows (blank glyph) rather than asserting, matching the TRAM
+// compositor's own missing-glyph fallback.
+void pc98emu_font_ank_rows(uint8_t ank_code, uint8_t rows_out[pc98emu::CELL_H]);
+void pc98emu_font_kanji_rows(uint16_t jis_code, uint16_t rows_out[pc98emu::CELL_H]);
+
 #endif // PC98EMU_TEXT_HPP

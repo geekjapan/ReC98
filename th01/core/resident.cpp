@@ -3,7 +3,13 @@
 
 #include "libs/master.lib/master.hpp"
 #include "th01/resident.hpp"
+#ifdef REC98_PORT
+// REC98_PORT: <process.h> is a Turbo C++ header; this file only needs
+// exit(), which <cstdlib> provides on a host toolchain.
+#include <cstdlib>
+#else
 #include <process.h>
+#endif
 
 resident_t __seg *resident;
 

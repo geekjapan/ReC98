@@ -147,6 +147,18 @@ void inline pokeb(uint16_t __segment, uint16_t __offset, int8_t __value) {
 // Alternate versions for 8-bit port numbers that don't spill the port number
 // to DX.
 #ifdef __cplusplus
+#ifdef REC98_PORT
+// REC98_PORT: __emit__(0xE6/0xE4, port) is raw x86 OUT/IN opcode emission,
+// unimplementable on a host process. Route through the same outportb()/
+// inportb() port dispatcher (port/compat/x86real_shim.cpp) that ordinary
+// (non-"_"-suffixed) calls already use instead -- same ports, same
+// semantics, just without the Turbo C++-specific fast encoding.
+#define _outportb_(port, val) outportb((port), (val))
+
+inline uint8_t _inportb_(uint8_t port) {
+	return inportb(port);
+}
+#else
 #define _outportb_(port, val) { \
 	_AL = val; \
 	__emit__(0xE6, port); /* OUT port, AL */ \
@@ -163,6 +175,7 @@ inline void __seg* intvector_segment(uint8_t i) {
 		peek(0, ((i * sizeof(void far *)) + sizeof(uint16_t)))
 	);
 }
+#endif
 #endif
 // --------------------------
 

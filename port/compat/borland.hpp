@@ -18,9 +18,19 @@
 #endif
 
 #include <cassert>
+#include <chrono>
 #include <cstdint>
+#include <thread>
 
 #include "pc98emu/pc98emu.hpp"
+
+// Turbo C++'s <dos.h> millisecond busy-wait, used by th01/hardware/graph.cpp's
+// palette fade loops between frames. A real sleep is a fine, simpler
+// replacement here (unlike frame_delay()'s vsync-driven waits, no rendering
+// needs to happen while this blocks).
+inline void delay(unsigned int ms) {
+	std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+}
 
 // Borland distance/calling-convention keywords -- meaningless in a flat,
 // single-calling-convention host build.
@@ -102,12 +112,30 @@ namespace port {
 // SEG_PLANE_* macros -- because this header must be includable *before*
 // pc98.h. Keep in sync with pc98.h's "Memory segments" section if it ever
 // changes.
+// Fake BIOS Data Area: op_01.cpp pokes/peeks segment 0 directly for a couple
+// of BIOS work-area bytes (BIOS_FLAG at 0:0x500, the keyboard buffer
+// head/tail/count at 0:0x524/0x526/0x528) as part of its keyboard-buffer
+// housekeeping. None of that state is read back by anything meaningful on
+// the port (there's no real BIOS keyboard buffer to clear), so a plain
+// zero-initialized scratch buffer is enough to satisfy the read/write
+// without asserting -- it just needs to not crash.
+inline uint8_t *fake_bda() {
+	static uint8_t bda[0x600] = {};
+	return bda;
+}
+
 inline void *resolve_far(uint16_t seg, uint16_t off) {
 	constexpr uint16_t SEG_PLANE_B_ = 0xA800;
 	constexpr uint16_t SEG_PLANE_R_ = 0xB000;
 	constexpr uint16_t SEG_PLANE_G_ = 0xB800;
 	constexpr uint16_t SEG_PLANE_E_ = 0xE000;
 	constexpr uint32_t PLANE_BYTES_ = 32000; // pc98emu::PLANE_SIZE
+
+	if(seg == 0) {
+		assert(off < 0x600 && "resolve_far(): BIOS Data Area offset out of "
+		                      "range of the fake_bda() scratch buffer");
+		return fake_bda() + off;
+	}
 
 	const uint32_t linear = (static_cast<uint32_t>(seg) << 4) + off;
 
@@ -151,6 +179,14 @@ inline uint16_t peek(uint16_t seg, uint16_t off) {
 
 inline void poke(uint16_t seg, uint16_t off, uint16_t value) {
 	*static_cast<uint16_t *>(MK_FP(seg, off)) = value;
+}
+
+// Turbo C++ intrinsic: 16-bit rotate right. th01/hardware/grppsafx.cpp's
+// graph_putsa_fx() uses this (rotr by 8, i.e. a byte swap) to move a glyph
+// row's bytes into the layout its VRAM-write path expects.
+inline uint16_t __rotr__(uint16_t val, int shift) {
+	shift &= 15;
+	return static_cast<uint16_t>((val >> shift) | (val << (16 - shift)));
 }
 
 #endif // PORT_COMPAT_BORLAND_HPP

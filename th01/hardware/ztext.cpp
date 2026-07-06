@@ -4,8 +4,12 @@
  * unused anyway.
  */
 
+#ifdef REC98_PORT
+#include "port/compat/mbstring_shim.hpp"
+#else
 #include <mbctype.h>
 #include <mbstring.h>
+#endif
 #include <stdarg.h>
 #include "libs/master.lib/pc98_gfx.hpp"
 #include "th01/hardware/ztext.hpp"

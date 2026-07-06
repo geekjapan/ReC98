@@ -8,6 +8,8 @@
 #include "x86real.h"
 #include "th01/hardware/vsync.hpp"
 
+#ifndef REC98_PORT
+
 extern bool vsync_initialized = false;
 
 volatile int z_vsync_Count1;
@@ -61,3 +63,42 @@ void z_vsync_wait(void)
 		_AL = inportb(0x60);
 	} while((_AL & 0x20) == 0);
 }
+
+#else // REC98_PORT
+
+// REC98_PORT: see th01/hardware/vsync.hpp's z_vsync_counter_t comment. There
+// is no real vsync interrupt to hook, so vsync_init()/vsync_exit() just
+// track the "are we initialized" flag that game_init()/game_exit_inner()
+// already gate on; the actual frame pacing lives in the counter type's
+// conversion operator below.
+
+#include "port/app/host.hpp"
+
+extern bool vsync_initialized = false;
+
+z_vsync_counter_t z_vsync_Count1;
+z_vsync_counter_t z_vsync_Count2;
+
+z_vsync_counter_t::operator int()
+{
+	port::host_present_frame();
+	count++;
+	return count;
+}
+
+void vsync_init(void)
+{
+	vsync_initialized = true;
+}
+
+void vsync_exit(void)
+{
+	vsync_initialized = false;
+}
+
+void z_vsync_wait(void)
+{
+	port::host_present_frame();
+}
+
+#endif // REC98_PORT

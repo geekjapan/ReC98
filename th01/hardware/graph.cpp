@@ -1,7 +1,16 @@
+#ifdef REC98_PORT
+// REC98_PORT: <dos.h>'s REGS/int86()/outportb()/getvect()/setvect() come
+// from x86real.h instead (included transitively via page.hpp, right below);
+// <mbctype.h>/<mbstring.h> aren't actually used in this file. <mem.h> is a
+// Turbo C++ header providing memcpy()/memset(), which <cstring> covers on a
+// host toolchain.
+#include <cstring>
+#else
 #include <dos.h>
 #include <mem.h>
 #include <mbctype.h>
 #include <mbstring.h>
+#endif
 #include "platform/x86real/pc98/page.hpp"
 #include "th01/v_colors.hpp"
 #include "th01/math/clamp.hpp"
@@ -16,11 +25,26 @@ static screen_point_t graph_r_last_line_end;
 
 /// VRAM plane "structures"
 /// -----------------------
+#ifdef REC98_PORT
+// REC98_PORT: `reinterpret_cast<dots8_t __seg *>(SEG_PLANE_B)` -- with __seg
+// emptied out -- reinterprets the raw segment *constant* (0xA800, a small
+// integer) as a host pointer, not an actual address of VRAM. Use the
+// properly-bound VRAM_PLANE_B/R/G/E globals instead (same ones
+// port/compat/borland.hpp's resolve_far() and pc98emu/vram.cpp maintain,
+// and what th01/hardware/planar.cpp -- not compiled under REC98_PORT, see
+// port/CMakeLists.txt -- would otherwise provide).
+#define Planes_declare(var) \
+	dots8_t far *var##_B = VRAM_PLANE_B; \
+	dots8_t far *var##_R = VRAM_PLANE_R; \
+	dots8_t far *var##_G = VRAM_PLANE_G; \
+	dots8_t far *var##_E = VRAM_PLANE_E;
+#else
 #define Planes_declare(var) \
 	dots8_t far *var##_B = reinterpret_cast<dots8_t __seg *>(SEG_PLANE_B); \
 	dots8_t far *var##_R = reinterpret_cast<dots8_t __seg *>(SEG_PLANE_R); \
 	dots8_t far *var##_G = reinterpret_cast<dots8_t __seg *>(SEG_PLANE_G); \
 	dots8_t far *var##_E = reinterpret_cast<dots8_t __seg *>(SEG_PLANE_E);
+#endif
 
 #define Planes_next_row(var) \
 	var##_B += ROW_SIZE; \

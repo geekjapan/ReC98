@@ -3,7 +3,11 @@
  * Code segment #1 of TH01's OP.EXE
  */
 
+#ifdef REC98_PORT
+#include <cstring>
+#else
 #include <mem.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include "platform/x86real/pc98/page.hpp"
@@ -533,6 +537,20 @@ void main_update_and_render(void)
 	}
 }
 
+#ifdef REC98_PORT
+// REC98_PORT: option_update_and_render() below does
+// `ring_dec_16(static_cast<int8_t>(opts.bgm_mode), ...)`, which expands to
+// `static_cast<int8_t>(opts.bgm_mode)--` -- Borland apparently treats a
+// same-size scalar cast as a real lvalue (mutating the original variable
+// through it), which standard C++ rejects ("assignment to cast is
+// illegal"). reinterpret_cast to a reference has the same effect (reinterpret
+// opts.bgm_mode's storage as int8_t, mutable in place) without relying on
+// that extension.
+#define OP01_BGM_MODE_AS_INT8() reinterpret_cast<int8_t &>(opts.bgm_mode)
+#else
+#define OP01_BGM_MODE_AS_INT8() static_cast<int8_t>(opts.bgm_mode)
+#endif
+
 void option_update_and_render(void)
 {
 	static bool16 in_this_menu = false;
@@ -563,7 +581,7 @@ void option_update_and_render(void)
 			break;
 		case 1:
 			ring_dec_16(
-				static_cast<int8_t>(opts.bgm_mode), (BGM_MODE_COUNT - 1)
+				OP01_BGM_MODE_AS_INT8(), (BGM_MODE_COUNT - 1)
 			);
 			break;
 		case 2:
@@ -581,7 +599,7 @@ void option_update_and_render(void)
 			ring_inc(opts.rank, RANK_LUNATIC);
 			break;
 		case 1:
-			ring_inc(static_cast<int8_t>(opts.bgm_mode), (BGM_MODE_COUNT - 1));
+			ring_inc(OP01_BGM_MODE_AS_INT8(), (BGM_MODE_COUNT - 1));
 			break;
 		case 2:
 			ring_inc(opts.credit_lives_extra, (CFG_CREDIT_LIVES_EXTRA_MAX - 1));

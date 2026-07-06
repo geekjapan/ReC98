@@ -147,6 +147,15 @@ template <class ComponentType, int Range> union RGB {
 	} c;
 	ComponentType v[COMPONENT_COUNT];
 
+#ifdef REC98_PORT
+	// REC98_PORT: Palette<RGBType>::range() below does `RGBType::Range`,
+	// referring to this union's non-type template parameter by a qualified
+	// name from outside the template -- not valid C++ (a template parameter
+	// isn't a member), but apparently accepted by Borland. Give it a real
+	// static member with the same value so that lookup works standardly.
+	static constexpr int RangeValue = Range;
+#endif
+
 	// Yes, we actually need this function in certain cases where code
 	// generation calls for a 0 in the ComponentType.
 	static ComponentType min() {
@@ -167,7 +176,11 @@ template <class RGBType> struct Palette {
 	RGBType colors[COLOR_COUNT];
 
 	static int range() {
+#ifdef REC98_PORT
+		return RGBType::RangeValue;
+#else
 		return RGBType::Range;
+#endif
 	}
 
 	RGBType& operator [](vc2 col) {
