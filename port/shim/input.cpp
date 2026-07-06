@@ -89,6 +89,7 @@ bool scancode_pressed(SDL_Scancode sc) {
 namespace port {
 
 void input_poll() {
+	SDL_PumpEvents();
 	int count = 0;
 	g_live_keys = SDL_GetKeyboardState(&count);
 	g_live_key_count = count;
@@ -104,6 +105,23 @@ int key_sense(int keygroup) {
 	constexpr int num_groups = sizeof(group_maps) / sizeof(group_maps[0]);
 	if(keygroup < 0 || keygroup >= num_groups) {
 		return 0;
+	}
+
+	// On real PC-98 hardware, key_sense() is a synchronous BIOS/keyboard-
+	// controller register read: every single call reflects the current,
+	// live key matrix, with no separate "poll" step. Most call sites only
+	// ever go through input_sense(), invoked once per game frame right
+	// after host_present_frame() has already refreshed g_live_keys -- but a
+	// few busy-wait loops (e.g. th01/main/bonus.cpp's post-stage-clear
+	// "release Shot/OK to continue" waits) call key_sense() in a tight loop
+	// with no frame_delay()/host_present_frame() in between at all. Without
+	// this refresh, those loops would keep re-reading the single stale
+	// snapshot from before the wait started, so a real player's key-up
+	// could never be observed -- turning an intentional "let go to
+	// continue" gate into a permanent deadlock. Re-polling here keeps
+	// key_sense() live for those loops too, matching hardware fidelity.
+	if(g_test_keys == nullptr) {
+		port::input_poll();
 	}
 
 	const GroupMap &map = group_maps[keygroup];

@@ -781,3 +781,35 @@ target_link_libraries(test_stage1_bringup PRIVATE
 )
 add_test(NAME stage1_bringup COMMAND test_stage1_bringup)
 set_tests_properties(stage1_bringup PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)
+
+# T19 (WORKFLOW.md): regression test for the "holding Shot continuously (vs
+# tapping) hangs th01main" stability bug -- see tests/stage1_holdshot_test.cpp
+# for the root cause (th01/hardware/scrollup.cpp's REC98_PORT branch: every
+# life lost or stage segment cleared hit an inportb()-based busy-wait with no
+# host equivalent, spinning forever) and a second, related VRAM-overrun crash
+# fix (port/compat/borland.hpp's resolve_far()). Generous timeout: clearing
+# stage 1's card walls via a scripted L/R sweep plus a directly-driven debug
+# cheat is still real, data-dependent gameplay time, not a fixed wall-clock
+# guess.
+add_executable(test_stage1_holdshot tests/stage1_holdshot_test.cpp)
+target_compile_definitions(test_stage1_holdshot PRIVATE GAME=1)
+target_link_libraries(test_stage1_holdshot PRIVATE
+	th01main_core appassetsdir apphost pc98emu shim compat SDL3::SDL3 Threads::Threads
+)
+add_test(NAME stage1_holdshot COMMAND test_stage1_holdshot)
+set_tests_properties(stage1_holdshot PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 120)
+
+# T19 (WORKFLOW.md): verifies the Shingyoku boss fight itself renders and
+# survives sustained continuous-Shot play without hanging or crashing -- see
+# tests/boss_singyoku_test.cpp for why this is a separate process/test from
+# stage1_holdshot above (short version: reaching the boss from a fresh
+# process is possible by seeding stage_id directly; carrying a single
+# process from "card walls cleared" into "boss fight in progress" isn't,
+# yet -- that transition needs a not-yet-implemented process re-exec).
+add_executable(test_boss_singyoku tests/boss_singyoku_test.cpp)
+target_compile_definitions(test_boss_singyoku PRIVATE GAME=1)
+target_link_libraries(test_boss_singyoku PRIVATE
+	th01main_core appassetsdir apphost pc98emu shim compat SDL3::SDL3 Threads::Threads
+)
+add_test(NAME boss_singyoku COMMAND test_boss_singyoku)
+set_tests_properties(boss_singyoku PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 120)

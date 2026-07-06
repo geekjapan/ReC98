@@ -122,6 +122,12 @@ uint8_t __outportb__(uint16_t port, uint8_t value) {
 	           // callers)
 	case 0x64: // VSync interrupt trigger ack (vsync.cpp ISR, unreached)
 	case 0x02: // 8259 PIC interrupt mask (vsync.cpp ISR setup, unreached)
+	case 0x60: // CRTC cursor-form parameter byte (th01/hardware/ztext.cpp's
+	           // z_text_setcursor(), reached from game_init()/game_exit_inner()
+	           // -- purely cosmetic text-mode hardware cursor shape/blink
+	           // state, with no host equivalent to reproduce)
+	case 0x62: // CRTC command register: CSRFORM (cursor form), same call site
+	           // and same reasoning as 0x60 above
 		return value;
 
 	case 0xA8: // Analog palette: color register select

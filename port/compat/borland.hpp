@@ -151,14 +151,44 @@ inline void *resolve_far(uint16_t seg, uint16_t off) {
 
 	for(const auto &plane : planes) {
 		const uint32_t base_linear = static_cast<uint32_t>(plane.seg) << 4;
-		if(linear >= base_linear && (linear - base_linear) < PLANE_BYTES_) {
-			return plane.base + (linear - base_linear);
+		// A real PC-98's VRAM planes are contiguous, wrap-around memory-
+		// mapped windows: an access that runs past one plane's nominal end
+		// just lands in early bytes of that same plane's window on real
+		// hardware (or spills into the next plane, itself also backed by
+		// real memory) instead of faulting. A handful of faithfully-
+		// decompiled ZUN quirks compute sprite/VRAM coordinates that graze
+		// past a plane's bottom or right edge on purpose or by (documented,
+		// e.g. th01/main/player/inv_spr.cpp's "ZUN bug" comment) mistake --
+		// harmless there, but a hard crash against pc98emu's fixed-size,
+		// non-wrapping plane buffers. Wrap modulo the plane size instead of
+		// asserting, so those quirks stay exactly as visually glitchy here
+		// as on real hardware rather than taking the whole process down.
+		// The overrun tolerance is a few rows' worth of bytes (comfortably
+		// more than the couple-row sprite overruns this is meant to catch),
+		// not a full extra plane. SEG_PLANE_B/R/G/E are 0x800 segment
+		// paragraphs (32768 bytes) apart in the real PC-98 memory map, but
+		// PLANE_BYTES_ is only 32000 -- a 768-byte gap between one plane's
+		// nominal end and the next plane's actual base. The tolerance must
+		// stay strictly under that gap: anything closer to it risks
+		// misidentifying an access actually meant for the *next* plane
+		// (typically its own row 0, small offsets) as a wrapped access to
+		// *this* one -- silently corrupting the wrong plane instead of the
+		// intended one. 320 = 4 VRAM rows (pc98.h's ROW_SIZE (80) * 4 -- not
+		// referenced directly, since this header must stay includable
+		// *before* pc98.h; see this file's own header comment).
+		constexpr uint32_t OVERRUN_TOLERANCE_ = 320;
+		if(
+			linear >= base_linear &&
+			(linear - base_linear) < (PLANE_BYTES_ + OVERRUN_TOLERANCE_)
+		) {
+			return plane.base + ((linear - base_linear) % PLANE_BYTES_);
 		}
 	}
 
 	assert(false && "resolve_far(): segment not backed by pc98emu "
 	                "(SEG_TRAM_JIS/ATRB are intentionally not byte-addressable here -- "
-	                "see this function's header comment -- or out-of-range plane offset)");
+	                "see this function's header comment -- or an offset further out of "
+	                "range than any real hardware wraparound would plausibly explain)");
 	return nullptr;
 }
 
